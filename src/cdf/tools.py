@@ -1,9 +1,3 @@
-"""Rhino-unabhängige Raster- und Zufallsfunktionen.
-
-Der Zufallsgenerator wird pro Aufruf mit seed initialisiert, damit eine
-Neuberechnung durch den Watcher dieselbe Zufallsverteilung liefert.
-"""
-
 import random
 
 

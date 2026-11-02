@@ -1,9 +1,3 @@
-"""Rhino-Geometriefunktionen; die Ausführung steuert cdf.__init__.
-
-Keine Geometrie beim Laden dieses Untermoduls erzeugen. So verwendet
-jeder neue Paketimport die vom Watcher neu geladenen Funktionen.
-"""
-
 import Rhino.Geometry as rg
 
 
