@@ -1,6 +1,7 @@
 """RhinoCommon-Grundkörper für die abstrakte Komposition."""
 
 import math
+import random
 
 import Rhino.Geometry as rg
 
@@ -8,11 +9,39 @@ import Rhino.Geometry as rg
 COLOR_GROUPS = ("white", "black", "blue", "red", "yellow")
 
 
-def slider_factor(value, name):
-    """Bilde einen Regler von -10 bis 10 auf einen Faktor von 0.6 bis 1.4 ab."""
+def slider_value(value, name):
+    """Akzeptiere nur endliche numerische Reglerwerte von -10 bis 10."""
+    try:
+        value = float(value)
+    except (TypeError, ValueError, OverflowError) as error:
+        raise ValueError(name + " muss eine Zahl zwischen -10 und 10 sein.") from error
     if not math.isfinite(value) or not -10 <= value <= 10:
         raise ValueError(name + " muss endlich sein und zwischen -10 und 10 liegen.")
-    return 1.0 + 0.04 * value
+    return value
+
+
+def slider_factor(value, name):
+    """Bilde einen Regler von -10 bis 10 auf einen Faktor von 0.6 bis 1.4 ab."""
+    return 1.0 + 0.04 * slider_value(value, name)
+
+
+def raster_count(value, name, reference, minimum, maximum):
+    """Runde auf Rasterstufen: -10 = Minimum, 0 = Referenz, 10 = Maximum.
+
+    Positive und negative Werte verteilen sich separat auf ihren Teilbereich.
+    Halbe Rasterstufen werden von der Referenz weg gerundet.
+    """
+    value = slider_value(value, name)
+    span = maximum - reference if value >= 0 else reference - minimum
+    steps = int(math.floor(abs(value) * span / 10.0 + 0.5))
+    return reference + steps if value >= 0 else reference - steps
+
+
+def varied_factor(value, seed, key):
+    """Stabile bauteilbezogene Größenvariation; ±10 ergibt etwa ±20–35 %."""
+    value = slider_value(value, str(key))
+    rng = random.Random("{}:{}".format(seed, key))
+    return 1.0 + value * rng.uniform(0.02, 0.035)
 
 
 def random_direction(rng, planar=False):

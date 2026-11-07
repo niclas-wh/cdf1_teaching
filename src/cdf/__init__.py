@@ -1,9 +1,11 @@
-"""Referenzkomposition für Rhino 8 / Grasshopper.
+"""Parametrische Referenzkomposition für Rhino 8 / Grasshopper.
 
-    a = cdf.composition(cache_id=str(ghenv.Component.InstanceGuid))
+    a = cdf.composition(u, v, w, x, y, z,
+                        cache_id=str(ghenv.Component.InstanceGuid))
 
+Alle Eingänge liegen zwischen -10 und 10; sechs Nullen ergeben die Referenz.
 A enthält alle Geometrien. Zusätzlich werden standardmäßig bearbeitbare
-Rhino-Objekte mit Material-Layern erzeugt. Die sechs Regler sind reserviert.
+Rhino-Objekte mit Material-Layern erzeugt. cdf.seed bestimmt stabile Zufallsfaktoren.
 """
 
 from importlib import reload
@@ -23,12 +25,29 @@ seed = 100
 _last_geometry = ()
 
 
-def composition(base_plate_size=0.0, sphere_size=0.0, sphere_position=0.0,
-                stair_length=0.0, grid_size=0.0, block_position=0.0, *,
+def composition(u=0.0, v=0.0, w=0.0, x=0.0, y=0.0, z=0.0, *,
                 bake=True, cache_id="default", force=False):
     """Alle Geometrien für A; optional automatisch ins aktive Rhino-Dokument.
 
-    U bis Z bleiben wirkungslos. Pro GH-Komponente eine eigene cache_id nutzen.
+    Jeder Regler akzeptiert -10 bis 10; 0 behält den Referenzstand bei.
+    u: Rechtsflügel mit 1/3/7 Fenstern bei -10/0/10; Balken wachsen nur nach rechts.
+    v: Durchmesser von Schaft, Kugel und Ringen des linken Kugelturms.
+    w: Kugelturmhöhe, mitwandernde Kugel, Ringe und Turmabschluss.
+    x: Mittlerer Aufbau mit 2/5/9 Geschossen bei -10/0/10; Dach wandert mit.
+    y: Farbige Quader und kleiner gelber Fußzylinder, L-Verbindungen bleiben bündig.
+    z: Linker Flügel mit 1/5/13 Lamellen bei -10/0/10 und mitwachsender Grundplatte.
+       Halbzylinderfaktor 0.6/1.0/1.8; positiver Bereich doppelt so stark wie bisher.
+
+    Rasteranzahlen werden gerundet; übrige Maße verändern sich stetig.
+    v/y nutzen feste Faktoren von etwa ±20–35 %; verbundene L-Teile gemeinsam.
+    Schacht: Unterkante Z=26, Rückkante bündig mit der Zylinderhinterkante.
+    Die blaue Abdeckung behält bei y<0 ihre Mindestgrundfläche; nur ihre Dicke
+    schrumpft weiter. Dachaufbauten bleiben hinter den Schachtwänden.
+    Rechte Balken behalten einen äußeren Überstand. Der blaue Fassadenstreifen
+    und der linke rote Block bleiben mindestens eine Einheit unter ihrer grauen
+    Nachbarfassade. Horizontale Fugen an Fensterfassaden und Säule: 0.24 Einheiten.
+    cdf.seed ändert die Faktoren, nicht den Nullstand. Kamera bleibt unverändert.
+    Pro GH-Komponente eine eigene cache_id nutzen.
     bake=False ist eine reine Vorschau ohne Dokumentänderungen.
     force=True verwirft manuelle Bearbeitungen der eigenen Cache-Objekte.
     """
@@ -37,8 +56,8 @@ def composition(base_plate_size=0.0, sphere_size=0.0, sphere_position=0.0,
     doc = Rhino.RhinoDoc.ActiveDoc
     tolerance = doc.ModelAbsoluteTolerance if doc is not None else 0.001
     groups = assignment_01.create_composition(
-        scale, origin, base_plate_size, sphere_size, sphere_position,
-        stair_length, grid_size, block_position, seed, tolerance=tolerance,
+        scale=scale, origin=origin, u=u, v=v, w=w, x=x, y=y, z=z,
+        seed=seed, tolerance=tolerance,
     )
     geometry = [shape for name in tools.COLOR_GROUPS for shape in groups[name]]
     if bake:
