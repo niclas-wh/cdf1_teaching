@@ -1,7 +1,6 @@
-"""Abstrakte räumliche Komposition nach der Bildvorlage, ohne Schriftzüge."""
+"""Architektonische Bauhaus-Komposition nach der Referenzansicht von Bild 4."""
 
 import math
-import random
 
 from . import tools
 
@@ -9,125 +8,179 @@ from . import tools
 def create_composition(scale=1.0, origin=(0.0, 0.0, 0.0),
                        base_plate_size=0.0, sphere_size=0.0, sphere_position=0.0,
                        stair_length=0.0, grid_size=0.0, block_position=0.0,
-                       seed=100):
-    """Liefere Geometrielisten nach Farbgruppen, ohne Materialzuweisung.
+                       seed=100, *, tolerance=0.001):
+    """Feste Referenzgeometrie, nach Materialien gruppiert.
 
-    Z zeigt nach oben; die Vorderseite liegt in negativer Y-Richtung.
-    Die Komposition ist für eine Perspektive von (220, -330, 240) ausgelegt.
-    Alle Objekte bleiben ungebakt, damit Neuberechnungen nichts duplizieren.
+    Z ist oben, die Hauptfassade liegt in negativer Y-Richtung. Der rechte
+    Flügel knickt am Zylinderturm um 90° in die positive Y-Richtung ab;
+    seine Fenster zeigen nach +X. Die Referenzansicht liegt auf der +X/-Y-Seite.
+    Die Zwischenplatten liegen in einer schwarzen Rück-/Seitenwand hinter
+    der Hauptfassade, der rechte Flügel vor dem seitlich versetzten Zylinderturm.
+    Seine Stirnlamellen enden an der Fensterfassade, der Bogenblock reicht
+    bis zur rückwärtigen Flügelebene. Links sind Lochplattenflügel, Kugelturm
+    und Gewölbeflügel separat nach vorn und links gestaffelt; Lamellen und
+    Gewölbe schließen an Wand und Trägerplatte an. Dachaufbauten reichen
+    nach unten hinter die Fassade; blaue Abschlüsse sitzen ohne Anschlussfuge.
+    Bogen- und Rundöffnungen sind flache Nischen mit dunklen Rückflächen.
+    Baugruppenversätze werden vor scale/origin in Modell-Einheiten angewendet.
+    Die sechs bisherigen Regler und seed sind reserviert und wirkungslos.
+    Maße sind Modell-Einheiten; Rückseiten sind aus dem Einzelbild angenähert.
+    Die Kamera wird nicht verändert.
     """
     if not math.isfinite(scale) or scale <= 0:
         raise ValueError("scale muss positiv und endlich sein.")
     if len(origin) != 3 or not all(math.isfinite(v) for v in origin):
         raise ValueError("origin muss drei endliche Koordinaten enthalten.")
-
-    plate_factor = tools.slider_factor(base_plate_size, "base_plate_size")
-    sphere_factor = tools.slider_factor(sphere_size, "sphere_size")
-    stair_factor = tools.slider_factor(stair_length, "stair_length")
-    grid_factor = tools.slider_factor(grid_size, "grid_size")
-    tools.slider_factor(sphere_position, "sphere_position")
-    tools.slider_factor(block_position, "block_position")
-    if not isinstance(seed, int):
-        raise ValueError("seed muss eine ganze Zahl sein.")
-
-    # Getrennte Zufallsströme halten Kugel- und Quaderrichtungen unabhängig.
-    sphere_rng = random.Random("spheres:{}".format(seed))
-    block_rng = random.Random("blocks:{}".format(seed))
+    if not math.isfinite(tolerance) or tolerance <= 0:
+        raise ValueError("tolerance muss positiv und endlich sein.")
+    tol = tolerance / scale
     groups = {name: [] for name in tools.COLOR_GROUPS}
+    right_wing = False
+    assembly_offset = (0.0, 0.0, 0.0)
+    wing_pivot = (28.0, -3.0, 0.0)
+    tower_x, tower_y, tower_radius = 31.0, -1.0, 5.5
+    tower_top, roof_base = 71.0, 68.0
 
-    def add(shape, color, name):
-        if shape is None:
-            raise RuntimeError("Geometrie fehlt: " + name)
-        if scale != 1.0 or tuple(origin) != (0.0, 0.0, 0.0):
-            shape = tools.transformed(shape, scale, origin)
-        groups[color].append(shape)
+    def add(shape, color):
+        if shape is None or not shape.IsValid or not shape.IsSolid:
+            raise RuntimeError("Ungültiger Volumenkörper in Farbgruppe " + color)
+        if right_wing:
+            shape = tools.rotated_z(shape, math.pi / 2, wing_pivot)
+        placed_origin = tuple(base + scale * delta
+                              for base, delta in zip(origin, assembly_offset))
+        groups[color].append(tools.transformed(shape, scale, placed_origin))
 
-    def block(x, y, z, w, d, h, color, name, movable=True):
-        if color != "white":
-            dx, dy, _ = tools.random_direction(block_rng, planar=True)
-            if movable:
-                x += dx * block_position
-                y += dy * block_position
-        add(tools.box(x, y, z, w, d, h), color, name)
+    def block(x, y, z, w, d, h, color="white"):
+        add(tools.box(x, y, z, w, d, h), color)
 
-    def ball(x, y, z, radius):
-        dx, dy, dz = tools.random_direction(sphere_rng)
-        return tools.sphere(x + dx * sphere_position,
-                            y + dy * sphere_position,
-                            z + dz * sphere_position, radius * sphere_factor)
+    def column(x, y, z, r, h, color="white"):
+        add(tools.cylinder(x, y, z, r, h), color)
 
-    block(-48 * plate_factor, 4 - 38 * plate_factor, 0,
-          96 * plate_factor, 76 * plate_factor, 4, "white", "Sockelplatte")
-    add(tools.wedge(-26, -18, 4, 53, 45, 20, 42), "blue", "Blauer Keil")
-    block(-5, -26, 4, 13, 12, 21, "black", "Schwarzer Vorderblock")
-    block(-35, -31, 8, 24, 24, 19, "red", "Roter Rippenkörper", movable=False)
-    for i in range(10):
-        block(-35, -31 + i * 2.4, 27, 24, 1.25, 2.0,
-              "red", "Rote Rippe {:02d}".format(i + 1), movable=False)
+    def arch_wall(x, y, z, w, d, h, centers, radius, spring=0.0,
+                  color="white"):
+        recess = 1.6
+        cutters = [tools.arch_prism(cx, y - 1, z + 1.4, radius, recess + 1,
+                                    spring, tol) for cx in centers]
+        add(tools.difference(tools.box(x, y, z, w, d, h), cutters, tol), color)
+        # Die Rückfläche sitzt in der Wand, damit keine Durchblicke entstehen.
+        block(x + 0.3, y + recess - 0.1, z + 0.3, w - 0.6, 0.2, h - 0.6, "black")
 
-    for i in range(12):
-        block(18, 4.4 + (-26.4 + i * 2.2) * stair_factor,
-              44.3 + (-20.3 + i * 1.7) * stair_factor,
-              20, 2.2 * stair_factor, 1.6 * stair_factor,
-              "white", "Rechte Treppenstufe {:02d}".format(i + 1))
-    block(18, 2, 44, 21, 12, 3, "yellow", "Gelbes Podest")
-    block(18, 12, 44, 21, 1.6, 10, "yellow", "Gelbe Rückwand")
-    block(37.4, 2, 44, 1.6, 10, 10, "yellow", "Gelbe Seitenwand")
-    add(ball(28, 7, 51, 3.0), "blue", "Blaue Podestkugel")
-    add(ball(34, 9, 54, 4.2), "blue", "Blaue Podestkugel groß")
-    add(ball(24, -12, 36, 4.7), "blue", "Blaue Treppenkugel")
+    # Mittlere, fünfgeschossige Fassade mit zehn Halbkreisbögen.
+    for row in range(5):
+        arch_wall(-15, -12, 26 + row * 9, 28, 7, 8.94,
+                  (-8, 5.5), 4.5)
+    block(-20, -11.8, 23, 5, 8, 46, "blue")
+    block(-20, -12, 22, 19, 13, 4, "blue")
+    block(-1, -5, 19, tower_x + 1, 18, 7, "red")
+    block(13, -5, 26, tower_x - 13, 14, 9, "red")
+    # L-förmiger Hintergrund; die Platten stoßen innen an beide schwarzen Wände.
+    shelf_left, shelf_front, shelf_back, backing = 8.0, -1.0, 10.0, 0.4
+    block(shelf_left, shelf_front, 35, backing, shelf_back - shelf_front, 37, "black")
+    block(shelf_left + backing, shelf_back - backing, 35,
+          tower_x - 0.2 - shelf_left - backing, backing, 37, "black")
+    for z in (35, 44, 53, 62):
+        block(shelf_left + backing, shelf_front, z,
+              tower_x - shelf_left - backing, shelf_back - backing - shelf_front, 1.1)
+    block(shelf_left, tower_y - 6, tower_top,
+          tower_x + tower_radius - shelf_left, shelf_back - (tower_y - 6), 5, "blue")
+    for z, height in ((11, 14.94), (26, 13.94), (40, 12.94),
+                      (53, 10.94), (64, tower_top - 64)):
+        column(tower_x, tower_y, z, tower_radius, height)
 
-    for i in range(30):
-        block(-72, 20 + (-56 + i * 1.9) * stair_factor,
-              56.75 + (-48.75 + i * 1.65) * stair_factor,
-              20, 0.9 * stair_factor, 0.9 * stair_factor,
-              "white", "Schwebende Sprosse {:02d}".format(i + 1))
+    # Lochplattenflügel und gelber Fuß bleiben als Baugruppe verbunden.
+    assembly_offset = (0.0, -4.0, 0.0)
+    for row in range(3):
+        z = 29 + row * 11
+        body = tools.box(-32, -10, z, 12, 6, 10.94)
+        cutter = tools.cylinder_y(-26, -11, z + 5.5, 3.1, 2.6)
+        add(tools.difference(body, [cutter], tol), "white")
+        block(-31.7, -8.5, z + 0.3, 11.4, 0.2, 10.3, "black")
+    block(-32, -3, 14, 8, 10, 21, "yellow")
 
-    add(tools.cylinder(-15, -3, 35, 3.5, 29), "red", "Rote Säule")
-    add(ball(-11, -1, 72, 10), "yellow", "Zentrale gelbe Kugel")
+    assembly_offset = (-10.0, -5.0, 0.0)
+    column(-28, 1, 40, 4.7, 59, "blue")
+    add(tools.sphere(-28, 1, 76, 10), "yellow")
+    column(-28, 1, 89.5, 5.2, 3.5)
+    column(-28, 1, 99, 7.8, 3.8)
+    column(-28, 1, 102.8, 3.3, 3.5, "red")
+    assembly_offset = (0.0, 0.0, 0.0)
+    block(-17, 2, roof_base, 9, 9, 80 - roof_base, "red")
 
-    # Zwei versetzte Schichten bilden das durchlässige räumliche Würfelraster.
-    for layer in range(2):
-        for row in range(10):
-            for col in range(10):
-                x = -28 + col * 3.65 + layer * 1.5
-                y = 11 + layer * 3.65
-                z = 61 + row * 3.65
-                block(-9.925 + (x + 9.925) * grid_factor, y,
-                      78.325 + (z - 78.325) * grid_factor,
-                      1.8 * grid_factor, 1.8, 1.8 * grid_factor, "white",
-                      "Raster {}-{}-{}".format(layer, row, col))
+    # Gemeinsamer Versatz: Rot hinter die Seitenwand, Gelb hinter die Rückwand.
+    assembly_offset = (shelf_left - 12, shelf_back - 8, 0.0)
+    body = tools.box(-3, 0, roof_base, 15, 7, 91 - roof_base)
+    add(tools.difference(body, [tools.cylinder_y(4.5, -1, 81.5, 4.8, 2.6)], tol), "red")
+    block(-2.7, 1.5, roof_base + 0.3, 14.4, 0.2,
+          90.7 - (roof_base + 0.3), "black")
+    block(10, 8, roof_base, 6, 9, 98 - roof_base, "yellow")
 
-    for i in range(10):
-        block(15, 17, 54 + i * 3.65, 3.5, 3.5, 3.35,
-              "red", "Roter Stapel {:02d}".format(i + 1))
-    add(tools.pyramid(16.75, 18.75, 92, 5.5, 5), "red", "Rote Stapelspitze")
+    # Gemeinsame Anschlussflächen vermeiden Überlappungen und schwebende Bauteile.
+    assembly_offset = (-1.0, -13.0, 0.0)
+    platform_z, platform_front, platform_back = 29.0, -10.0, 10.0
+    platform_top = platform_z + 2.4
+    portal_front, portal_back = -6.0, 2.0
+    portal_top = platform_top + 17.0
+    block(-63, platform_front, platform_z, 32,
+          platform_back - platform_front, platform_top - platform_z, "black")
+    arch_wall(-50, portal_front, platform_top, 19, portal_back - portal_front,
+              portal_top - platform_top, (-42,), 5, 5)
+    block(-41, -1, portal_top, 7, portal_back + 1, 62 - portal_top, "red")
+    add(tools.arch_prism(-56, -4, platform_top, 6, portal_back + 4,
+                         tolerance=tol), "white")
 
-    block(8, 22, 93, 24, 15, 20, "black", "Oberer schwarzer Würfel")
-    block(-17, 22, 111, 49, 12, 9, "blue", "Oberer blauer Querbalken")
-    block(-17, 22, 105, 9, 12, 15, "blue", "Blaues Balkenende")
-    block(-7, 19, 104, 9, 12, 42, "black", "Schwarzer Turm")
-    block(-7, 19, 104, 24, 12, 8, "black", "Schwarzer Turmfuß")
-    add(tools.pyramid(-2.5, 25, 146, 27, 23), "yellow", "Gelbe Pyramide")
+    # Gewölbe mit Fuß bis zur Platte; der Kamin sitzt in einer echten Aussparung.
+    chimney_x, chimney_y, chimney_radius, chimney_top = -48.0, 6.0, 3.1, 56.0
+    chimney_height = chimney_top - platform_top
+    vault = tools.arch_prism(-46, portal_back, platform_top, 9,
+                             platform_back - portal_back, 39 - platform_top, tol)
+    chimney_cut = tools.cylinder(chimney_x, chimney_y, platform_top - 1,
+                                 chimney_radius, chimney_height + 2)
+    add(tools.difference(vault, [chimney_cut], tol), "black")
+    column(chimney_x, chimney_y, platform_top, chimney_radius, chimney_height)
 
-    add(tools.revolved_profile(20, 27, 113, [
-        (0, 0), (3.4, 0), (4.5, 0.8), (4.6, 3),
-        (4.6, 8), (4.2, 10), (2.4, 12), (1.7, 13),
-    ]), "white", "Weiße Flasche")
-    add(tools.cylinder(20, 27, 126, 1.7, 2.2), "yellow", "Flaschenhals")
-    add(tools.cylinder(20, 27, 128.2, 2.6, 1.0), "yellow", "Flaschenverschluss")
+    lower_half = tools.arch_prism(-49, -4, 0, 6, 9, tolerance=tol)
+    import Rhino.Geometry as rg
+    lower_half.Transform(rg.Transform.Rotation(math.pi, rg.Vector3d.YAxis,
+                                               rg.Point3d(-49, -4, 0)))
+    lower_half.Transform(rg.Transform.Translation(0, 0, platform_z))
+    add(lower_half, "white")
+    for i in range(5):
+        block(-40 + i * 2, platform_front, platform_top, 0.9,
+              portal_front - platform_front, portal_top - platform_top)
+    column(-37, -3, 20, 3.4, platform_z - 20)
 
-    # Außenwand, runder Rand und Innenwand ergeben einen offenen Hohlkörper.
-    add(tools.revolved_profile(-36, 26, 91, [
-        (0, -16), (7, -15), (13, -11), (17, -4), (18, 4),
-        (16, 12), (12, 16), (9, 16.5), (8.5, 15.7),
-        (11, 14), (14, 10), (15, 4), (14, -3),
-        (10, -9), (5, -12), (0, -12.5),
-    ]), "white", "Weißer offener Hohlkörper")
-
-    block(-67, 22, 91, 19, 19, 19, "yellow", "Schwebender gelber Würfel")
-    add(ball(-67, 30, 145, 10), "red", "Schwebende rote Kugel")
-    add(ball(12, 37, 152, 10), "white", "Obere weiße Kugel")
-    add(ball(45, 26, 65, 10), "yellow", "Rechte gelbe Kugel")
-    add(ball(62, -2, 9, 10), "yellow", "Untere gelbe Kugel")
+    # Nach der Drehung als Ganzes vorziehen; die Stirnlamellen liegen vor dem Turm.
+    right_wing = True
+    assembly_offset = (tower_x - wing_pivot[0] + 15.0,
+                       tower_y - wing_pivot[1], 0.0)
+    wing_start, wing_front, wing_back = 33.0, -4.0, 12.0
+    window_centers = (39, 49.5, 60)
+    frame_width, frame_height, frame_wall = 7.4, 9.5, 1.6
+    frame_z = 21
+    opening_width = frame_width - 2 * frame_wall
+    opening_height = frame_height - 2 * frame_wall
+    cutters = [tools.box(cx - opening_width / 2, -7, frame_z + frame_wall,
+                         opening_width, 4.6, opening_height)
+               for cx in window_centers]
+    add(tools.difference(tools.box(wing_start, wing_front, 18, 35,
+                                   wing_back - wing_front, 17), cutters, tol), "white")
+    block(33.3, -2.5, 18.3, 34.4, 0.2, 16.4, "black")
+    for x in window_centers:
+        add(tools.chamfered_frame(x - frame_width / 2, -6, frame_z,
+                                  frame_width, frame_height, 2.5, frame_wall,
+                                  chamfer=0.8, tolerance=tol, inner_chamfer=0.2), "white")
+    block(29, -5, 35, 40, 18, 3, "black")
+    arch_wall(32, -2, 38, 34, wing_back + 2, 11, (39, 49, 59), 3.5)
+    block(30, -3, 49, 35, wing_back + 3, 4.5, "blue")
+    for i in range(5):
+        block(33 + i * 6, 3, 53.5, 3, 12, 16 - i * 1.5)
+    for i in range(5):
+        block(31.4, wing_front, 23 + i * 2.7, wing_start - 31.4,
+              7.8 - wing_front, 1.2)
+    block(29, -2, 15, 16, 14, 3, "blue")
+    block(29, -2, 18, 3, 9, 5, "blue")
+    block(65, 6, 38, 4, 6, 7, "black")
+    right_wing = False
+    assembly_offset = (0.0, 0.0, 0.0)
+    column(15, 0, 12, 2.7, 8, "yellow")
     return groups

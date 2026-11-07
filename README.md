@@ -87,3 +87,112 @@ This tells Rhino's Python where to find the CDF code, so you can `import` it in 
 
 
 **Done! Now you can go to VS Code, Rhino, or Grasshopper to run the example files of CDF.**
+
+## Bildkomposition: Rhino-Layer und bearbeitbare Geometrie
+
+Die [Geometrie](src/cdf/assignment_01.py) nähert die architektonische Bildvorlage
+räumlich an: Bogenfassaden, runde Öffnungen, Lamellen, Turm mit Kugel und
+Primärfarben. Z zeigt nach oben, die Hauptfassade liegt in negativer Y-Richtung.
+Der rechte Flügel knickt am Zylinderturm bei `(28, -3)` um 90° in die **negative
+Y-Richtung** ab: Unterbau, Fenster mit umlaufenden inneren und äußeren 45°-Fasen,
+Bogenreihe, blaue Balken und Dachrippen werden gemeinsam gedreht. Die horizontalen
+Lamellen sitzen auf der kurzen Stirnseite und verdecken keines der drei Fenster.
+Die RGB-Farben bleiben unverändert; Rot, Blau und Gelb sind nun matt (kein Glanz,
+keine Reflexion, schwarze Glanzlichtfarbe). Elfenbein und Anthrazit bleiben unverändert.
+Maße und nicht sichtbare Rückseiten sind angenähert, keine maßhaltige Rekonstruktion.
+Die Hauptausdehnung beträgt etwa 110 Modell-Einheiten. `cdf.scale` und
+`cdf.origin` steuern bei Bedarf Größe und Position. Die Flügeldrehung erfolgt vor
+Skalierung und Verschiebung, sodass der Anschluss am Turm erhalten bleibt.
+
+### Vorhandenen AutoReloader-Block anpassen
+
+Der eingebettete Code in [assignment-01.gh](assignments/assignment-01.gh) muss im
+Grasshopper-Skripteditor angepasst werden; die GH-Datei wird nicht automatisch
+umgeschrieben. Python 3 in Rhino 8 verwenden.
+
+1. Auto-Reload, Pfadüberwachung und alle Aufrufe von `getview()`, `setview()` und
+   `caputreview()` beibehalten. [viewtools.py](src/cdf/viewtools.py) bleibt unverändert.
+2. Die bisherige Zuweisung des Ergebnisses von `cdf.composition(...)` durch diese
+   Zeile ersetzen (nach Import/Reload von `cdf`, vor Ansichts-/Capture-Aufrufen):
+
+   ```python
+   a = cdf.composition(cache_id=str(ghenv.Component.InstanceGuid))
+   ```
+
+   Der Ausgang im Screenshot heißt `a`. Falls er tatsächlich `A` heißt, muss auch
+   die Python-Variable `A` heißen. Nicht mehr `a, b, c, d, e = ...` verwenden:
+   Der Rückgabewert ist jetzt eine flache Liste aller Breps, nicht fünf Farbgruppen.
+   U bis Z bleiben angeschlossen, werden aber vorerst nicht ausgewertet. Auch ein
+   alter Aufruf mit sechs Positionsargumenten akzeptiert sie weiterhin wirkungslos.
+3. Die **Vorschau dieses Python-Blocks ausschalten** (Rechtsklick → Preview aus).
+   Auch nachgeschaltete Vorschau-Komponenten ausschalten, damit die GH-Vorschau
+   nicht die Materialfarben der gecachten Rhino-Objekte überlagert. A bleibt als
+   Geometrieausgabe für weitere GH-Verarbeitung verfügbar.
+4. Einmal neu berechnen. Es entstehen fünf Unterlayer unter `CDF_Bildkomposition`:
+   Elfenbein, Anthrazit, Ultramarin, Zinnoberrot und Sonnengelb. Die
+   [Layerverwaltung](src/cdf/layer.py) weist Layerfarben und Render-Materialien zu;
+   jedes Objekt verwendet Farbe und Material **vom Layer**. Layeränderungen sind
+   in Rhino 8 sofort wirksam; das veraltete `Layer.CommitChanges()` wird nicht benutzt.
+   In Rhino lassen sich
+   die Objekte sofort auswählen, verschieben und bearbeiten; zusätzliches Bake
+   oder eine Content-Cache-Komponente ist nicht nötig.
+5. Zum Betrachten **Rendered/Gerendert** oder **Raytraced** verwenden. Shaded zeigt
+   Layerfarben, aber nicht dieselbe Materialwirkung. Für die geknickte Komposition
+   aus **negativer X- und negativer Y-Richtung** schauen. Eine parallele Ansicht aus
+   ungefähr `(-180, -300, 160)` auf `(0, -10, 56)` ist ein geeigneter Ausgangspunkt;
+   anschließend auf die Komposition zoomen und mit dem vorhandenen Button speichern.
+   Bei anderem `scale`/`origin` diese Koordinaten entsprechend mittransformieren.
+   Die Kamera wird durch `composition()` absichtlich nicht verändert.
+   Die bestehende `view.json` wird nicht überschrieben, bis `getview()` aufgerufen wird.
+   Licht, Schatten und Bildausschnitt müssen für die Vorlage in Rhino abgestimmt werden.
+
+### Cache-Verhalten und Grenzen
+
+- Der Cache liegt im aktiven **Rhino-Dokument**, nicht im Grasshopper-Dokument.
+  Eine Geometrieliste an A allein enthält keine Rhino-Layer oder Materialattribute.
+  Die direkte Rhino-Ausgabe ist deshalb ein zusätzlicher, absichtlicher Seiteneffekt.
+- Identische Geometrie erzeugt keine Duplikate, auch nach Modul-Reload. Manuelle
+  Bearbeitungen, Layerwechsel und Löschungen bleiben bei unveränderter Eingabe erhalten.
+  A enthält trotzdem die ursprüngliche generierte Geometrie, nicht die nachträglich
+  bearbeiteten Rhino-Objekte. Der Bildexport verwendet deren ursprüngliche Grenzen.
+- Änderungen an Geometrie, Maßstab, Ursprung oder Materialdefinition ersetzen nur
+  die für dieselbe `cache_id` markierten Objekte. Manuelle Änderungen dieser Objekte
+  gehen dann verloren. Für dauerhafte eigene Varianten vorher kopieren und bei den
+  Kopien den Benutzertext `cdf.composition.owner` entfernen.
+- `cdf.composition(cache_id=..., force=True)` erzeugt den ursprünglichen Zustand
+  ausdrücklich neu, auch nach manuellem Löschen. Danach `force=True` wieder entfernen.
+  Gesperrte Cache-Objekte verhindern eine Ersetzung mit einer Fehlermeldung.
+- Mehrere GH-Blöcke benötigen unterschiedliche IDs; `InstanceGuid` liefert diese.
+  Ohne explizite ID wird `default` benutzt und mehrere Aufrufer teilen einen Cache.
+- Die Rhino-Datei als `.3dm` speichern: Objekte, Layer, Materialien und Cache-Zustand
+  werden dort gespeichert. Entfernen des GH-Blocks löscht die Rhino-Objekte nicht.
+  Manuell gebakte Altgeometrie ohne Cache-Markierung wird niemals automatisch gelöscht.
+- `cdf.composition(bake=False)` liefert nur Geometrie an A, ohne Dokumentänderungen;
+  bereits gecachte Objekte bleiben bestehen. Layer und Farben sind dann nicht in A.
+- Die bestehenden ViewTools bleiben vollständig erhalten. Vor einer Aufnahme erst
+  die Komposition berechnen lassen. Andere sichtbare Objekte ausblenden; Kamera und
+  Export funktionieren weiterhin über die bisherigen Buttons.
+
+### Validierung
+
+Die Cache-Vertragstests benötigen nur die Python-Standardbibliothek:
+
+```powershell
+.\.venv\Scripts\python.exe -m unittest discover -s tests -v
+```
+
+Der zusätzliche RhinoCommon-Geometrietest wird außerhalb Rhino übersprungen.
+Für einen echten Volumenkörper-/Boolean-Test in Rhinos Python-3-Skripteditor:
+
+```python
+import sys
+import unittest
+sys.path.insert(0, r"C:\Users\your_username\workspace\cdf1_teaching\tests")
+from test_composition import GeometryTests
+suite = unittest.defaultTestLoader.loadTestsFromTestCase(GeometryTests)
+unittest.TextTestRunner(verbosity=2).run(suite)
+```
+
+Anschließend im GH-Block Neuberechnung, manuelle Objektbearbeitung, erneute
+Neuberechnung und `force=True` prüfen. Die visuelle Übereinstimmung muss in Rhino
+beurteilt werden; die Tests ersetzen keinen Vergleich mit der Bildvorlage.

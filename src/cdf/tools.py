@@ -84,6 +84,108 @@ def revolved_profile(x, y, z, profile):
     return surface.ToBrep()
 
 
+def arch_prism(x, y, z, radius, depth, spring_height=0.0, tolerance=0.001):
+    """Geschlossener Bogenkörper in XZ, extrudiert in positive Y-Richtung."""
+    left = rg.Point3d(x - radius, y, z + spring_height)
+    right = rg.Point3d(x + radius, y, z + spring_height)
+    top = rg.Point3d(x, y, z + spring_height + radius)
+    outline = rg.PolyCurve()
+    if spring_height > 0:
+        bottom_left = rg.Point3d(x - radius, y, z)
+        bottom_right = rg.Point3d(x + radius, y, z)
+        outline.Append(rg.LineCurve(bottom_left, bottom_right))
+        outline.Append(rg.LineCurve(bottom_right, right))
+    else:
+        outline.Append(rg.LineCurve(left, right))
+    outline.Append(rg.ArcCurve(rg.Arc(right, top, left)))
+    if spring_height > 0:
+        outline.Append(rg.LineCurve(left, bottom_left))
+    surface = rg.Surface.CreateExtrusion(outline, rg.Vector3d(0, depth, 0))
+    if surface is None:
+        raise RuntimeError("Bogenextrusion fehlgeschlagen.")
+    result = surface.ToBrep().CapPlanarHoles(tolerance)
+    if result is None or not result.IsSolid:
+        raise RuntimeError("Bogenkörper konnte nicht geschlossen werden.")
+    return result
+
+
+def cylinder_y(x, y, z, radius, depth):
+    plane = rg.Plane(rg.Point3d(x, y, z), rg.Vector3d.YAxis)
+    return rg.Cylinder(rg.Circle(plane, radius), depth).ToBrep(True, True)
+
+
+def difference(body, cutters, tolerance=0.001):
+    """Boolesche Ausschnitte; Fehler nicht als geschlossene Wand verschweigen."""
+    pieces = [body]
+    for cutter in cutters:
+        next_pieces = []
+        for piece in pieces:
+            result = rg.Brep.CreateBooleanDifference(piece, cutter, tolerance)
+            if not result:
+                raise RuntimeError("Boolescher Ausschnitt fehlgeschlagen.")
+            next_pieces.extend(result)
+        pieces = next_pieces
+    if len(pieces) != 1 or not pieces[0].IsValid or not pieces[0].IsSolid:
+        raise RuntimeError("Ausschnitt ergibt keinen einzelnen gültigen Volumenkörper.")
+    return pieces[0]
+
+
+def chamfered_frame(x, y, z, width, height, depth, wall,
+                    chamfer=0.45, tolerance=0.001, *, inner_chamfer=None):
+    """Rechteckiger Volumenrahmen mit umlaufender innerer/äußerer 45°-Fase.
+
+    Die Vorderseite liegt bei y, die Rückseite bei y + depth. Außen- und
+    Innenfase sind unabhängig; dazwischen bleibt eine ebene Stirnfläche.
+    inner_chamfer=None übernimmt die Außenfase wie bei bisherigen Aufrufen.
+    Identisch geordnete Rechteckkonturen ergeben ebene, auf Gehrung
+    zusammentreffende Flächen ohne toleranzabhängigen Kanten-Fillet.
+    """
+    if inner_chamfer is None:
+        inner_chamfer = chamfer
+    values = (x, y, z, width, height, depth, wall, chamfer, inner_chamfer, tolerance)
+    if not all(math.isfinite(v) for v in values):
+        raise ValueError("Rahmenmaße müssen endlich sein.")
+    if (min(width, height, depth, wall, chamfer, inner_chamfer, tolerance) <= 0
+            or 2 * wall >= min(width, height)
+            or chamfer + inner_chamfer >= wall
+            or max(chamfer, inner_chamfer) >= depth):
+        raise ValueError("Rahmen benötigt eine Öffnung, Restwand und ausreichende Fasentiefe.")
+
+    def rectangle(inset, at_y):
+        return [rg.Point3d(x + inset, at_y, z + inset),
+                rg.Point3d(x + width - inset, at_y, z + inset),
+                rg.Point3d(x + width - inset, at_y, z + height - inset),
+                rg.Point3d(x + inset, at_y, z + height - inset)]
+
+    rings = [rectangle(0, y + depth), rectangle(0, y + chamfer),
+             rectangle(chamfer, y), rectangle(wall - inner_chamfer, y),
+             rectangle(wall, y + inner_chamfer), rectangle(wall, y + depth)]
+    faces = []
+    for ring, following in zip(rings, rings[1:] + rings[:1]):
+        for i in range(4):
+            j = (i + 1) % 4
+            face = rg.Brep.CreateFromCornerPoints(ring[i], ring[j],
+                                                  following[j], following[i], tolerance)
+            if face is None:
+                raise RuntimeError("Eine Fasenfläche konnte nicht erzeugt werden.")
+            faces.append(face)
+    joined = rg.Brep.JoinBreps(faces, tolerance)
+    if not joined or len(joined) != 1 or not joined[0].IsValid or not joined[0].IsSolid:
+        raise RuntimeError("Der gefaste Rahmen konnte nicht geschlossen werden.")
+    result = joined[0]
+    if result.SolidOrientation == rg.BrepSolidOrientation.Inward:
+        result.Flip()
+    return result
+
+
+def rotated_z(geometry, angle, center):
+    result = geometry.Duplicate()
+    rotation = rg.Transform.Rotation(angle, rg.Vector3d.ZAxis, rg.Point3d(*center))
+    if not result.Transform(rotation):
+        raise RuntimeError("Gebäudeflügel konnte nicht gedreht werden.")
+    return result
+
+
 def transformed(geometry, scale, origin):
     result = geometry.Duplicate()
     result.Transform(rg.Transform.Scale(rg.Point3d.Origin, scale))
