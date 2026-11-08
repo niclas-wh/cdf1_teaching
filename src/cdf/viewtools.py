@@ -1,4 +1,4 @@
-"""Ansichtssteuerung und PNG-Export für Rhino / Grasshopper."""
+"""Model-viewport persistence and cropped PNG export for Rhino / Grasshopper."""
 
 def _active_view():
     import Rhino
@@ -6,15 +6,15 @@ def _active_view():
     doc = Rhino.RhinoDoc.ActiveDoc
     view = None if doc is None else doc.Views.ActiveView
     if view is None or isinstance(view, Rhino.Display.RhinoPageView):
-        raise RuntimeError("Bitte eine Rhino-Modellansicht aktivieren.")
+        raise RuntimeError("Activate a Rhino model viewport, not a layout page.")
     return view
 
 
 def getview(path):
-    """Speichere Kamera, Projektion und Ausschnitt der aktiven Modellansicht.
+    """Save the active model viewport's camera, projection and framing to JSON.
 
-    Gespeicherte Rhino-Ansichten verwenden absolute Modellkoordinaten.
-    Farben und Anzeigemodus werden nicht gespeichert.
+    Saved viewports use absolute model coordinates, not coordinates relative to
+    scale/origin. Colors and the display mode are not saved. Return the file path.
     """
     import json
     from pathlib import Path
@@ -32,7 +32,7 @@ def getview(path):
     finally:
         info.Dispose()
     destination = Path(path)
-    # Erst vollständig schreiben, dann die bisherige Ansicht atomar ersetzen.
+    # Finish writing the new view before atomically replacing the previous file.
     from tempfile import NamedTemporaryFile
     temporary = None
     try:
@@ -49,10 +49,11 @@ def getview(path):
 
 
 def setview(path, scale, origin):
-    """Lade die gespeicherte Ansicht; die anfängliche Referenz folgt scale/origin.
+    """Restore a saved viewport, or fit a reference-format view to scale/origin.
 
-    Nach getview() werden stattdessen die gespeicherten absoluten Koordinaten
-    und der gespeicherte Ausschnitt verwendet, ohne erneutes ZoomExtents.
+    A viewport written by getview() restores its absolute camera and framing
+    without another zoom-to-extents. A reference-format file instead transforms
+    its stored target, offset and bounds using scale/origin and fits those bounds.
     """
     import json
     from pathlib import Path
@@ -62,7 +63,7 @@ def setview(path, scale, origin):
 
     data = json.loads(Path(path).read_text(encoding="utf-8"))
     if data.get("version") != 1 or data.get("kind") not in ("reference", "viewport"):
-        raise ValueError("Unbekanntes Format in view.json.")
+        raise ValueError("Unsupported view JSON version or kind.")
     view = _active_view()
     viewport = view.ActiveViewport
     if data["kind"] == "viewport":
@@ -70,10 +71,10 @@ def setview(path, scale, origin):
         if not isinstance(info, Rhino.DocObjects.ViewportInfo):
             if info is not None:
                 info.Dispose()
-            raise ValueError("view.json enthält keine gültige Rhino-Ansicht.")
+            raise ValueError("The view JSON does not contain a valid Rhino viewport.")
         try:
             if not viewport.SetViewProjection(info, True):
-                raise RuntimeError("Die gespeicherte Ansicht konnte nicht eingestellt werden.")
+                raise RuntimeError("Could not restore the saved viewport.")
         finally:
             info.Dispose()
     else:
@@ -87,32 +88,32 @@ def setview(path, scale, origin):
         viewport.CameraUp = rg.Vector3d(*data["up"])
         bounds = rg.BoundingBox(point(data["bounds_min"]), point(data["bounds_max"]))
         if not viewport.ZoomBoundingBox(bounds):
-            raise RuntimeError("Die Referenzansicht konnte nicht eingerahmt werden.")
+            raise RuntimeError("Could not fit the reference view to its bounds.")
     view.Redraw()
     return True
 
 def caputreview(path: str, transparent_background: bool, background_color,
                 border: int, geometry, resolution: float = 300):
-    """Exportiere ein PNG mit border freien Pixeln auf jeder Seite.
+    """Export a tightly cropped PNG with a pixel border on every side.
 
-    path: absoluter Zielordner. Dateiname: ViewCapture_JJMMTT_HHMMSS.png.
-    transparent_background: 1/True = transparent, 0/False = deckende Farbe
-        aus background_color (System.Drawing.Color oder GH_Colour).
-        Der Alphawert der Eingangsfarbe wird für den deckenden Hintergrund ignoriert.
-    border: nichtnegative ganze Pixelzahl im fertigen Bild, unabhängig von dpi.
-    Zuerst composition() aufrufen und die GH-Vorschau aktualisieren lassen;
-    Export am besten in einer separaten GH-Komponente per Button auslösen.
-    Andere sichtbare Rhino-/GH-Objekte vorher ausblenden: auch sie würden in
-    der Aufnahme erscheinen. Die Bodenebene wird vorübergehend ausgeschaltet.
-    Der Ausschnitt umfasst die zuletzt erzeugte Komposition. Blickrichtung und
-    Anzeigemodus bleiben erhalten; die Ansicht wird nach dem Export restauriert.
-    Die transparente Silhouette wird pixelgenau zugeschnitten, dann border
-    ergänzt. Objektinterne Schatten bleiben erhalten, Bodenschatten entfallen.
-    Aufnahme mit dreifacher Viewport-Pixelgröße. resolution legt die positive,
-    endliche Druckauflösung in dpi fest (Standard: 300); Pixelzahl bleibt gleich.
-    Jeder Aufruf exportiert; Auslösung bei Bedarf im GH-Codeblock steuern.
-    Existierende Dateinamen werden nicht überschrieben.
-    Rückgabe: absoluter Dateipfad.
+    path: absolute output folder. Filename: ViewCapture_YYMMDD_HHMMSS.png.
+    transparent_background: 1/True keeps transparency; 0/False fills an opaque
+        background_color (System.Drawing.Color or a wrapped GH color).
+        The supplied color's alpha is ignored for an opaque background.
+    border: whole pixels from 0 to 10000 in the final image, independent of dpi.
+    Run composition() and let its document objects/GH preview update first;
+    preferably trigger export with a button in a separate GH component.
+    Hide unrelated visible Rhino/GH objects: they would also appear in the image.
+    The ground plane is temporarily disabled, so its shadows are not captured.
+    Framing uses the supplied geometry, which the public wrapper takes from the
+    last composition() call. View direction and display mode are retained; the
+    original viewport and ground-plane state are restored after capture.
+    The alpha silhouette is cropped to visible pixels, then border is added.
+    Capture uses three times the viewport's width and height. resolution sets
+    positive, finite print-resolution metadata in dpi (default: 300), not pixels.
+    Cropping and border determine the final dimensions, limited to 64 megapixels.
+    Every call exports; gate calls in GH if needed. Existing files are not replaced.
+    Return the absolute output file path. The historical API spelling is retained.
     """
 
     from datetime import datetime
@@ -121,44 +122,44 @@ def caputreview(path: str, transparent_background: bool, background_color,
 
     if (isinstance(resolution, bool) or not isinstance(resolution, (int, float))
             or not math.isfinite(resolution) or resolution <= 0):
-        raise ValueError("resolution muss eine positive, endliche Zahl in dpi sein.")
+        raise ValueError("resolution must be a positive, finite number in dpi.")
 
     import Rhino
     from System.Drawing import Bitmap, Color, Graphics, Rectangle, GraphicsUnit
     from System.Drawing.Imaging import ImageFormat, PixelFormat
 
     if not isinstance(transparent_background, (bool, int)) or transparent_background not in (0, 1):
-        raise ValueError("transparent_background muss 0/False oder 1/True sein.")
+        raise ValueError("transparent_background must be 0/False or 1/True.")
     fill_color = Color.Transparent
     if not transparent_background:
         color = getattr(background_color, "Value", background_color)
         if not isinstance(color, Color):
-            raise ValueError("background_color muss eine Farbe aus einem GH-Colour-Block sein.")
+            raise ValueError("background_color must be a System.Drawing.Color or a wrapped GH color.")
         fill_color = Color.FromArgb(255, color.R, color.G, color.B)
 
     if isinstance(border, bool) or not isinstance(border, (int, float)):
-        raise ValueError("border muss eine nichtnegative ganze Pixelzahl sein.")
+        raise ValueError("border must be a nonnegative whole number of pixels.")
     if not 0 <= border <= 10000 or int(border) != border:
-        raise ValueError("border muss eine ganze Pixelzahl zwischen 0 und 10000 sein.")
+        raise ValueError("border must be a whole number of pixels between 0 and 10000.")
     border = int(border)
     if not geometry:
-        raise RuntimeError("Vor dem Export composition() aufrufen.")
+        raise RuntimeError("Call composition() before exporting.")
     if not isinstance(path, str) or not path.strip():
-        raise ValueError("path muss ein absoluter Ordnerpfad sein.")
+        raise ValueError("path must be an absolute folder path.")
     folder = Path(path).expanduser()
     if not folder.is_absolute():
-        raise ValueError("path muss ein absoluter Ordnerpfad sein.")
+        raise ValueError("path must be an absolute folder path.")
     if folder.exists() and not folder.is_dir():
-        raise ValueError("path muss einen Ordner bezeichnen, keine Datei.")
+        raise ValueError("path must refer to a folder, not a file.")
     destination = folder / datetime.now().strftime("ViewCapture_%y%m%d_%H%M%S.png")
     if destination.exists():
-        raise FileExistsError("Aufnahme existiert bereits; bitte erneut auslösen: "
+        raise FileExistsError("The capture already exists; trigger export again: "
                               + str(destination))
 
     doc = Rhino.RhinoDoc.ActiveDoc
     view = None if doc is None else doc.Views.ActiveView
     if view is None or isinstance(view, Rhino.Display.RhinoPageView):
-        raise RuntimeError("Bitte eine Rhino-Modellansicht aktivieren.")
+        raise RuntimeError("Activate a Rhino model viewport, not a layout page.")
 
     settings = Rhino.Display.ViewCapture()
     settings.Width = max(1, view.ActiveViewport.Size.Width * 3)
@@ -179,22 +180,22 @@ def caputreview(path: str, transparent_background: bool, background_color,
         for shape in geometry:
             bounds.Union(shape.GetBoundingBox(True))
         if not bounds.IsValid:
-            raise RuntimeError("Die Komposition hat keine gültigen Geometriegrenzen.")
+            raise RuntimeError("The composition has no valid geometry bounds.")
         bounds.Inflate(max(bounds.Diagonal.Length * 0.05, 0.001))
         if not viewport.ZoomBoundingBox(bounds):
-            raise RuntimeError("Die Komposition konnte nicht vollständig eingerahmt werden.")
+            raise RuntimeError("Could not fit the entire composition in the viewport.")
         ground.Enabled = False
         view.Redraw()
         bitmap = settings.CaptureToBitmap(view)
         if bitmap is None:
-            raise RuntimeError("Die Rhino-Ansicht konnte nicht aufgenommen werden.")
+            raise RuntimeError("Could not capture the Rhino viewport.")
         left, top, width, height = _capture_bounds(bitmap)
         if (left == 0 or top == 0 or left + width == bitmap.Width
                 or top + height == bitmap.Height):
-            raise RuntimeError("Geometrie berührt den Aufnahmerand; andere Objekte ausblenden.")
+            raise RuntimeError("Geometry touches the capture border; hide unrelated objects.")
         out_width, out_height = width + 2 * border, height + 2 * border
         if out_width * out_height > 64000000:
-            raise ValueError("Bild zu groß (maximal 64 Megapixel); border verkleinern.")
+            raise ValueError("Image exceeds the 64-megapixel limit; reduce border or viewport size.")
         output = Bitmap(out_width, out_height, PixelFormat.Format32bppArgb)
         output.SetResolution(float(resolution), float(resolution))
         graphics = Graphics.FromImage(output)
@@ -219,7 +220,7 @@ def caputreview(path: str, transparent_background: bool, background_color,
 
 
 def _capture_bounds(bitmap):
-    """Grenzen aller nichttransparenten Pixel ohne langsame GetPixel-Aufrufe."""
+    """Return nontransparent pixel bounds without slow per-pixel GetPixel calls."""
     from System import Array, Byte, IntPtr
     from System.Drawing import Rectangle
     from System.Drawing.Imaging import ImageLockMode, PixelFormat
@@ -243,5 +244,5 @@ def _capture_bounds(bitmap):
     finally:
         bitmap.UnlockBits(data)
     if right < left:
-        raise RuntimeError("Keine sichtbare Geometrie aufgenommen; GH-Vorschau prüfen.")
+        raise RuntimeError("No visible geometry captured; check Rhino object visibility and GH preview.")
     return left, top, right - left + 1, bottom - top + 1

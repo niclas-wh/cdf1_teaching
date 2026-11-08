@@ -1,4 +1,4 @@
-"""RhinoCommon-Grundkörper für die abstrakte Komposition."""
+"""RhinoCommon primitives, control mappings and transforms for the composition."""
 
 import math
 import random
@@ -10,26 +10,26 @@ COLOR_GROUPS = ("white", "black", "blue", "red", "yellow")
 
 
 def slider_value(value, name):
-    """Akzeptiere nur endliche numerische Reglerwerte von -10 bis 10."""
+    """Convert a control value to a finite float in the inclusive range [-10, 10]."""
     try:
         value = float(value)
     except (TypeError, ValueError, OverflowError) as error:
-        raise ValueError(name + " muss eine Zahl zwischen -10 und 10 sein.") from error
+        raise ValueError(name + " must be a number between -10 and 10.") from error
     if not math.isfinite(value) or not -10 <= value <= 10:
-        raise ValueError(name + " muss endlich sein und zwischen -10 und 10 liegen.")
+        raise ValueError(name + " must be finite and between -10 and 10.")
     return value
 
 
 def slider_factor(value, name):
-    """Bilde einen Regler von -10 bis 10 auf einen Faktor von 0.6 bis 1.4 ab."""
+    """Map [-10, 10] linearly to a size factor of [0.6, 1.4], with 0 mapping to 1."""
     return 1.0 + 0.04 * slider_value(value, name)
 
 
 def raster_count(value, name, reference, minimum, maximum):
-    """Runde auf Rasterstufen: -10 = Minimum, 0 = Referenz, 10 = Maximum.
+    """Round to grid counts: -10 = minimum, 0 = reference, 10 = maximum.
 
-    Positive und negative Werte verteilen sich separat auf ihren Teilbereich.
-    Halbe Rasterstufen werden von der Referenz weg gerundet.
+    Each sign uses its own span between the reference and the corresponding
+    endpoint. Half steps are rounded away from the reference count.
     """
     value = slider_value(value, name)
     span = maximum - reference if value >= 0 else reference - minimum
@@ -38,14 +38,14 @@ def raster_count(value, name, reference, minimum, maximum):
 
 
 def varied_factor(value, seed, key):
-    """Stabile bauteilbezogene Größenvariation; ±10 ergibt etwa ±20–35 %."""
+    """Return a seed/key-stable factor; +/-10 produces a +/-20-35% size change."""
     value = slider_value(value, str(key))
     rng = random.Random("{}:{}".format(seed, key))
     return 1.0 + value * rng.uniform(0.02, 0.035)
 
 
 def random_direction(rng, planar=False):
-    """Erzeuge einen gleichverteilten Einheitsvektor in XY oder im Raum."""
+    """Sample a uniform unit direction in the XY plane or in three dimensions."""
     angle = rng.uniform(0.0, 2.0 * math.pi)
     z = 0.0 if planar else rng.uniform(-1.0, 1.0)
     radius = math.sqrt(max(0.0, 1.0 - z * z))
@@ -102,19 +102,19 @@ def wedge(x, y, z, width, depth, front_height, back_height):
 
 
 def revolved_profile(x, y, z, profile):
-    """Drehe ein (Radius, Höhe)-Profil um die vertikale Achse."""
+    """Interpolate (radius, height) samples and revolve them around a vertical axis."""
     points = [rg.Point3d(x + radius, y, z + height)
               for radius, height in profile]
     curve = rg.Curve.CreateInterpolatedCurve(points, 3)
     axis = rg.Line(rg.Point3d(x, y, z), rg.Point3d(x, y, z + 1))
     surface = rg.RevSurface.Create(curve, axis, 0.0, 2.0 * math.pi)
     if surface is None:
-        raise RuntimeError("Das Rotationsprofil konnte nicht erzeugt werden.")
+        raise RuntimeError("Could not create the revolved profile.")
     return surface.ToBrep()
 
 
 def arch_prism(x, y, z, radius, depth, spring_height=0.0, tolerance=0.001):
-    """Geschlossener Bogenkörper in XZ, extrudiert in positive Y-Richtung."""
+    """Create a capped XZ arch extruded along +Y; zero spring height gives a half-disc."""
     left = rg.Point3d(x - radius, y, z + spring_height)
     right = rg.Point3d(x + radius, y, z + spring_height)
     top = rg.Point3d(x, y, z + spring_height + radius)
@@ -131,10 +131,10 @@ def arch_prism(x, y, z, radius, depth, spring_height=0.0, tolerance=0.001):
         outline.Append(rg.LineCurve(left, bottom_left))
     surface = rg.Surface.CreateExtrusion(outline, rg.Vector3d(0, depth, 0))
     if surface is None:
-        raise RuntimeError("Bogenextrusion fehlgeschlagen.")
+        raise RuntimeError("Arch extrusion failed.")
     result = surface.ToBrep().CapPlanarHoles(tolerance)
     if result is None or not result.IsSolid:
-        raise RuntimeError("Bogenkörper konnte nicht geschlossen werden.")
+        raise RuntimeError("Could not cap the arch solid.")
     return result
 
 
@@ -144,41 +144,41 @@ def cylinder_y(x, y, z, radius, depth):
 
 
 def difference(body, cutters, tolerance=0.001):
-    """Boolesche Ausschnitte; Fehler nicht als geschlossene Wand verschweigen."""
+    """Subtract cutters, raising on failure instead of silently returning an uncut wall."""
     pieces = [body]
     for cutter in cutters:
         next_pieces = []
         for piece in pieces:
             result = rg.Brep.CreateBooleanDifference(piece, cutter, tolerance)
             if not result:
-                raise RuntimeError("Boolescher Ausschnitt fehlgeschlagen.")
+                raise RuntimeError("Boolean subtraction failed.")
             next_pieces.extend(result)
         pieces = next_pieces
     if len(pieces) != 1 or not pieces[0].IsValid or not pieces[0].IsSolid:
-        raise RuntimeError("Ausschnitt ergibt keinen einzelnen gültigen Volumenkörper.")
+        raise RuntimeError("Subtraction did not produce a single valid solid.")
     return pieces[0]
 
 
 def chamfered_frame(x, y, z, width, height, depth, wall,
                     chamfer=0.45, tolerance=0.001, *, inner_chamfer=None):
-    """Rechteckiger Volumenrahmen mit umlaufender innerer/äußerer 45°-Fase.
+    """Create a rectangular solid frame with continuous inner/outer 45-degree chamfers.
 
-    Die Vorderseite liegt bei y, die Rückseite bei y + depth. Außen- und
-    Innenfase sind unabhängig; dazwischen bleibt eine ebene Stirnfläche.
-    inner_chamfer=None übernimmt die Außenfase wie bei bisherigen Aufrufen.
-    Identisch geordnete Rechteckkonturen ergeben ebene, auf Gehrung
-    zusammentreffende Flächen ohne toleranzabhängigen Kanten-Fillet.
+    The front lies at y and the back at y + depth. Outer and inner chamfers
+    are independent, with a flat front band between them. inner_chamfer=None
+    uses the outer chamfer width. Consistently ordered rectangular rings form
+    planar, mitered faces without relying on tolerance-sensitive edge fillets.
+    Embed the straight outer section behind the facade to expose only the bevel.
     """
     if inner_chamfer is None:
         inner_chamfer = chamfer
     values = (x, y, z, width, height, depth, wall, chamfer, inner_chamfer, tolerance)
     if not all(math.isfinite(v) for v in values):
-        raise ValueError("Rahmenmaße müssen endlich sein.")
+        raise ValueError("Frame dimensions must be finite.")
     if (min(width, height, depth, wall, chamfer, inner_chamfer, tolerance) <= 0
             or 2 * wall >= min(width, height)
             or chamfer + inner_chamfer >= wall
             or max(chamfer, inner_chamfer) >= depth):
-        raise ValueError("Rahmen benötigt eine Öffnung, Restwand und ausreichende Fasentiefe.")
+        raise ValueError("The frame needs an opening, a remaining front band and sufficient chamfer depth.")
 
     def rectangle(inset, at_y):
         return [rg.Point3d(x + inset, at_y, z + inset),
@@ -196,11 +196,11 @@ def chamfered_frame(x, y, z, width, height, depth, wall,
             face = rg.Brep.CreateFromCornerPoints(ring[i], ring[j],
                                                   following[j], following[i], tolerance)
             if face is None:
-                raise RuntimeError("Eine Fasenfläche konnte nicht erzeugt werden.")
+                raise RuntimeError("Could not create a frame face.")
             faces.append(face)
     joined = rg.Brep.JoinBreps(faces, tolerance)
     if not joined or len(joined) != 1 or not joined[0].IsValid or not joined[0].IsSolid:
-        raise RuntimeError("Der gefaste Rahmen konnte nicht geschlossen werden.")
+        raise RuntimeError("Could not join the chamfered frame into a closed solid.")
     result = joined[0]
     if result.SolidOrientation == rg.BrepSolidOrientation.Inward:
         result.Flip()
@@ -211,7 +211,7 @@ def rotated_z(geometry, angle, center):
     result = geometry.Duplicate()
     rotation = rg.Transform.Rotation(angle, rg.Vector3d.ZAxis, rg.Point3d(*center))
     if not result.Transform(rotation):
-        raise RuntimeError("Gebäudeflügel konnte nicht gedreht werden.")
+        raise RuntimeError("Could not rotate the building wing.")
     return result
 
 

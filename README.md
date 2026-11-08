@@ -88,111 +88,196 @@ This tells Rhino's Python where to find the CDF code, so you can `import` it in 
 
 **Done! Now you can go to VS Code, Rhino, or Grasshopper to run the example files of CDF.**
 
-## Bildkomposition: Rhino-Layer und bearbeitbare Geometrie
+---
 
-Die [Geometrie](src/cdf/assignment_01.py) nähert die architektonische Bildvorlage
-räumlich an: Bogenfassaden, runde Öffnungen, Lamellen, Turm mit Kugel und
-Primärfarben. Z zeigt nach oben, die Hauptfassade liegt in negativer Y-Richtung.
-Der rechte Flügel knickt am Zylinderturm bei `(28, -3)` um 90° in die **negative
-Y-Richtung** ab: Unterbau, Fenster mit umlaufenden inneren und äußeren 45°-Fasen,
-Bogenreihe, blaue Balken und Dachrippen werden gemeinsam gedreht. Die horizontalen
-Lamellen sitzen auf der kurzen Stirnseite und verdecken keines der drei Fenster.
-Die RGB-Farben bleiben unverändert; Rot, Blau und Gelb sind nun matt (kein Glanz,
-keine Reflexion, schwarze Glanzlichtfarbe). Elfenbein und Anthrazit bleiben unverändert.
-Maße und nicht sichtbare Rückseiten sind angenähert, keine maßhaltige Rekonstruktion.
-Die Hauptausdehnung beträgt etwa 110 Modell-Einheiten. `cdf.scale` und
-`cdf.origin` steuern bei Bedarf Größe und Position. Die Flügeldrehung erfolgt vor
-Skalierung und Verschiebung, sodass der Anschluss am Turm erhalten bleibt.
+# Assignment 01
 
-### Vorhandenen AutoReloader-Block anpassen
+## Parametric composition: Rhino layers and editable geometry
 
-Der eingebettete Code in [assignment-01.gh](assignments/assignment-01.gh) muss im
-Grasshopper-Skripteditor angepasst werden; die GH-Datei wird nicht automatisch
-umgeschrieben. Python 3 in Rhino 8 verwenden.
+The [composition generator](src/cdf/assignment_01.py) approximates an architectural
+reference using arched facades, circular recesses, fins, a sphere tower and primary
+colors. It is not a dimensionally accurate reconstruction; hidden backs are inferred.
 
-1. Auto-Reload, Pfadüberwachung und alle Aufrufe von `getview()`, `setview()` und
-   `caputreview()` beibehalten. [viewtools.py](src/cdf/viewtools.py) bleibt unverändert.
-2. Die bisherige Zuweisung des Ergebnisses von `cdf.composition(...)` durch diese
-   Zeile ersetzen (nach Import/Reload von `cdf`, vor Ansichts-/Capture-Aufrufen):
+Z points up. The central facade faces **-Y**. The right wing is rotated **+90 degrees**
+around `(28, -3)` and then offset as an assembly, so its windows face **+X** and its
+length extends along **+Y**. Its horizontal fins sit on the short end face. To see
+both facades, view the composition from the **positive-X/negative-Y side**.
+`composition()` does not change the camera. `cdf.scale` and `cdf.origin` apply global
+scale and translation after the local rotations and assembly offsets.
+
+### Controls
+
+[composition()](src/cdf/__init__.py) accepts six controls in the inclusive range
+**-10 to 10**. Six zeros produce the current reference layout. Nonfinite or
+out-of-range values raise an error.
+
+| Control | Effect | Values at -10 / 0 / 10 |
+| --- | --- | --- |
+| `u` | Right-wing length, both window rows, backing, beams and tapered roof ribs | 1 / 3 / 7 windows per row |
+| `v` | Different diameter factors for the left sphere tower's shaft, sphere, collars and red tip | Approximately -20-35% / unchanged / +20-35% per part |
+| `w` | Sphere-tower height; sphere, collars and top cap move with the shaft | Nominal height factor 0.6 / 1.0 / 1.4 |
+| `x` | Central facade height, shelf count, black enclosure, segmented column and roof elements | 2 / 5 / 9 storeys |
+| `y` | Colored boxes and the small yellow foot cylinder; connected blue L-shaped parts share their transform | Approximately -20-35% / unchanged / +20-35%, subject to connection limits |
+| `z` | Left-wing fins, portal, half-cylinders, chimney and growing black platform | 1 / 5 / 13 fins; half-cylinder factor 0.6 / 1.0 / 1.8 |
+
+Window, storey and fin counts change in rounded grid steps, not continuously.
+Half steps round away from the reference count. Each sign uses its own range
+between zero and its endpoint. The central storey pitch stays at 9 model units;
+the right-wing rectangular and arched windows retain pitches of 10.5 and 10 units.
+Other dimensions vary continuously, with clearance and connection limits applied.
+
+The size factors for `v` and `y` are reproducible for each part key and `cdf.seed`
+(default: `100`), independent of the current window/storey counts. Changing the
+seed does not change the zero-control layout. Only the left sphere tower responds
+to `v` and `w`; the central light-colored column responds to `x` instead.
+
+The generator maintains these connections:
+
+- Right-wing beams keep their inner ends fixed. `u` changes only their length
+  outward; `y` changes their cross-section and outer overhang.
+- Connected blue L-shaped parts use a shared factor and anchor. The blue facade
+  strip and left red portal block end at least 1 unit below their adjacent facades.
+- The shaft enclosure starts at the central facade's underside, `Z=26`, and ends
+  at the central column's rear edge. Its blue cap always covers the full footprint,
+  even when `y` is negative; thickness can still shrink.
+- Roof blocks grow away from the shaft. The red eye block is 26 units high at
+  zero controls, with its opening center 17 units above its base.
+- Right-window outer chamfers reach the facade plane; their straight outer sections
+  are embedded in the wall. The left portal has a fixed 2-unit width allowance.
+- Horizontal joints in both stacked window facades and the segmented column are
+  0.24 units wide. All listed dimensions are before global scaling/translation.
+
+### Grasshopper integration
+
+Use Python 3 in Rhino 8. Update the embedded code in
+[assignment-01.gh](assignments/assignment-01.gh) in the Grasshopper script editor;
+the Python package does not rewrite the GH file.
+
+1. Keep the existing AutoReloader, path monitoring and view/capture buttons.
+2. Connect six sliders with a range of -10 to 10 and a default of 0. After importing
+   or reloading `cdf`, forward the inputs to the composition call. For inputs named
+   `U` through `Z`, use:
 
    ```python
-   a = cdf.composition(cache_id=str(ghenv.Component.InstanceGuid))
+   a = cdf.composition(
+       u=U, v=V, w=W, x=X, y=Y, z=Z,
+       cache_id=str(ghenv.Component.InstanceGuid),
+   )
    ```
 
-   Der Ausgang im Screenshot heißt `a`. Falls er tatsächlich `A` heißt, muss auch
-   die Python-Variable `A` heißen. Nicht mehr `a, b, c, d, e = ...` verwenden:
-   Der Rückgabewert ist jetzt eine flache Liste aller Breps, nicht fünf Farbgruppen.
-   U bis Z bleiben angeschlossen, werden aber vorerst nicht ausgewertet. Auch ein
-   alter Aufruf mit sechs Positionsargumenten akzeptiert sie weiterhin wirkungslos.
-3. Die **Vorschau dieses Python-Blocks ausschalten** (Rechtsklick → Preview aus).
-   Auch nachgeschaltete Vorschau-Komponenten ausschalten, damit die GH-Vorschau
-   nicht die Materialfarben der gecachten Rhino-Objekte überlagert. A bleibt als
-   Geometrieausgabe für weitere GH-Verarbeitung verfügbar.
-4. Einmal neu berechnen. Es entstehen fünf Unterlayer unter `CDF_Bildkomposition`:
-   Elfenbein, Anthrazit, Ultramarin, Zinnoberrot und Sonnengelb. Die
-   [Layerverwaltung](src/cdf/layer.py) weist Layerfarben und Render-Materialien zu;
-   jedes Objekt verwendet Farbe und Material **vom Layer**. Layeränderungen sind
-   in Rhino 8 sofort wirksam; das veraltete `Layer.CommitChanges()` wird nicht benutzt.
-   In Rhino lassen sich
-   die Objekte sofort auswählen, verschieben und bearbeiten; zusätzliches Bake
-   oder eine Content-Cache-Komponente ist nicht nötig.
-5. Zum Betrachten **Rendered/Gerendert** oder **Raytraced** verwenden. Shaded zeigt
-   Layerfarben, aber nicht dieselbe Materialwirkung. Für die geknickte Komposition
-   aus **negativer X- und negativer Y-Richtung** schauen. Eine parallele Ansicht aus
-   ungefähr `(-180, -300, 160)` auf `(0, -10, 56)` ist ein geeigneter Ausgangspunkt;
-   anschließend auf die Komposition zoomen und mit dem vorhandenen Button speichern.
-   Bei anderem `scale`/`origin` diese Koordinaten entsprechend mittransformieren.
-   Die Kamera wird durch `composition()` absichtlich nicht verändert.
-   Die bestehende `view.json` wird nicht überschrieben, bis `getview()` aufgerufen wird.
-   Licht, Schatten und Bildausschnitt müssen für die Vorlage in Rhino abgestimmt werden.
+   If the component inputs use lowercase names, use those names on the right-hand
+   side instead. Match `a` to the actual output name, such as `A` if capitalized.
+   The return value is **one flat list of Breps**, not five separate color outputs.
+3. With the default `bake=True`, **disable preview** for this Python component and
+   downstream preview components. Otherwise GH preview may cover the cached Rhino
+   objects' material colors. The geometry output remains available for further use.
+4. Recompute. Editable objects are synchronized into five material layers under
+   `CDF_Composition`; no separate Bake or Content Cache component is required.
+5. Use **Rendered** or **Raytraced** for material appearance. Shaded uses layer
+   colors but does not produce the same lighting/material response. Choose a view
+   from the positive-X/negative-Y side and save it with `cdf.getview()` when ready.
 
-### Cache-Verhalten und Grenzen
+### Layers and materials
 
-- Der Cache liegt im aktiven **Rhino-Dokument**, nicht im Grasshopper-Dokument.
-  Eine Geometrieliste an A allein enthält keine Rhino-Layer oder Materialattribute.
-  Die direkte Rhino-Ausgabe ist deshalb ein zusätzlicher, absichtlicher Seiteneffekt.
-- Identische Geometrie erzeugt keine Duplikate, auch nach Modul-Reload. Manuelle
-  Bearbeitungen, Layerwechsel und Löschungen bleiben bei unveränderter Eingabe erhalten.
-  A enthält trotzdem die ursprüngliche generierte Geometrie, nicht die nachträglich
-  bearbeiteten Rhino-Objekte. Der Bildexport verwendet deren ursprüngliche Grenzen.
-- Änderungen an Geometrie, Maßstab, Ursprung oder Materialdefinition ersetzen nur
-  die für dieselbe `cache_id` markierten Objekte. Manuelle Änderungen dieser Objekte
-  gehen dann verloren. Für dauerhafte eigene Varianten vorher kopieren und bei den
-  Kopien den Benutzertext `cdf.composition.owner` entfernen.
-- `cdf.composition(cache_id=..., force=True)` erzeugt den ursprünglichen Zustand
-  ausdrücklich neu, auch nach manuellem Löschen. Danach `force=True` wieder entfernen.
-  Gesperrte Cache-Objekte verhindern eine Ersetzung mit einer Fehlermeldung.
-- Mehrere GH-Blöcke benötigen unterschiedliche IDs; `InstanceGuid` liefert diese.
-  Ohne explizite ID wird `default` benutzt und mehrere Aufrufer teilen einen Cache.
-- Die Rhino-Datei als `.3dm` speichern: Objekte, Layer, Materialien und Cache-Zustand
-  werden dort gespeichert. Entfernen des GH-Blocks löscht die Rhino-Objekte nicht.
-  Manuell gebakte Altgeometrie ohne Cache-Markierung wird niemals automatisch gelöscht.
-- `cdf.composition(bake=False)` liefert nur Geometrie an A, ohne Dokumentänderungen;
-  bereits gecachte Objekte bleiben bestehen. Layer und Farben sind dann nicht in A.
-- Die bestehenden ViewTools bleiben vollständig erhalten. Vor einer Aufnahme erst
-  die Komposition berechnen lassen. Andere sichtbare Objekte ausblenden; Kamera und
-  Export funktionieren weiterhin über die bisherigen Buttons.
+The [layer manager](src/cdf/layer.py) assigns both object color and render material
+**by layer**, using these labels and RGB values:
 
-### Validierung
+| Layer under `CDF_Composition` | RGB |
+| --- | --- |
+| `01_Ivory` | `(226, 212, 192)` |
+| `02_Anthracite` | `(37, 38, 36)` |
+| `03_Ultramarine` | `(6, 38, 145)` |
+| `04_Vermilion` | `(228, 12, 18)` |
+| `05_SunYellow` | `(255, 190, 5)` |
 
-Die Cache-Vertragstests benötigen nur die Python-Standardbibliothek:
+Render-material names use the root and child label, for example
+`CDF_Composition_03_Ultramarine`. Blue, red and yellow have zero shine and
+reflectivity, with a black specular color. Ivory and anthracite retain their
+configured low shine/reflectivity. Document-controlled layer properties apply
+immediately; material changes are committed through the material table.
 
-```powershell
-.\.venv\Scripts\python.exe -m unittest discover -s tests -v
-```
+On updating an older document, the layer manager can identify an existing
+composition root through cache-owned objects and reuse uniquely numbered child
+layers. These layers and their matching CDF materials are renamed in place rather
+than creating a second layer tree. Ambiguous candidates raise an error instead of
+renaming an arbitrary tree. Unrelated layers are not renamed.
 
-Der zusätzliche RhinoCommon-Geometrietest wird außerhalb Rhino übersprungen.
-Für einen echten Volumenkörper-/Boolean-Test in Rhinos Python-3-Skripteditor:
+**The English labels change the palette fingerprint. The next recompute refreshes
+owned geometry, so preserve any manual variants before recomputing.** Ownership
+and cache metadata keys remain unchanged.
+
+### Cache behavior and limitations
+
+- Cache state belongs to the active **Rhino document**, not the Grasshopper document.
+  The returned geometry list alone carries no Rhino layer/material attributes.
+- Identical generated geometry and palette inputs do not create duplicates, even
+  after module reload. Manual object edits, layer changes and deletions remain
+  while those inputs stay unchanged.
+- The returned geometry is always the generated geometry, not manually edited
+  cache objects. PNG framing also uses the last generated geometry's bounds.
+- Changes to generated geometry, global scale/origin or the palette replace only
+  objects marked with the same `cache_id`; their manual edits are lost. To preserve
+  a variant, copy its objects and remove the `cdf.composition.owner` user text from
+  the copies before recomputing. Unmarked objects are never automatically deleted.
+- `force=True` explicitly replaces the cache even when inputs have not changed,
+  including after manual deletion. Remove it after the reset. Locked/reference
+  cache objects prevent replacement and raise an error.
+- Use a distinct `cache_id` per GH component, for example its `InstanceGuid`.
+  Omitting it uses `default`, so multiple callers would share the same cache.
+- Save the Rhino document as `.3dm` to retain objects, layers, materials and cache
+  state. Removing the GH component does not remove cached Rhino objects.
+- `bake=False` returns geometry without adding/updating document objects; existing
+  cached objects remain. Enable GH preview separately if a preview-only workflow
+  is desired; the output list itself does not contain layer/material attributes.
+
+### Saved views and PNG export
+
+[viewtools.py](src/cdf/viewtools.py) provides the existing public view helpers:
+
+- `cdf.getview()` saves the active model viewport's camera, projection and framing
+  to [view.json](src/cdf/view.json), replacing the file atomically. Saved viewports
+  use absolute model coordinates, not coordinates relative to `scale`/`origin`.
+  Colors and display mode are not saved.
+- `cdf.setview()` restores that saved viewport without another zoom-to-extents.
+  It also supports a reference-format JSON file, whose camera/bounds are transformed
+  by `scale`/`origin`. Layout pages are not supported by these helpers.
+- `cdf.caputreview(...)` exports on every call. The historical function spelling
+  is retained for compatibility. Gate it with a button rather than calling it on
+  every slider update, and let the composition/document preview update first.
+
+Example capture call, after generating the composition:
 
 ```python
-import sys
-import unittest
-sys.path.insert(0, r"C:\Users\your_username\workspace\cdf1_teaching\tests")
-from test_composition import GeometryTests
-suite = unittest.defaultTestLoader.loadTestsFromTestCase(GeometryTests)
-unittest.TextTestRunner(verbosity=2).run(suite)
+if capture:
+    image_path = cdf.caputreview(
+        r"C:\Users\your_username\Pictures\CDF",
+        transparent_background=True,
+        border=32,
+        resolution=300,
+    )
 ```
 
-Anschließend im GH-Block Neuberechnung, manuelle Objektbearbeitung, erneute
-Neuberechnung und `force=True` prüfen. Die visuelle Übereinstimmung muss in Rhino
-beurteilt werden; die Tests ersetzen keinen Vergleich mit der Bildvorlage.
+For an opaque background, use `transparent_background=False` and provide
+`background_color` from a GH color input or `System.Drawing.Color`. Its alpha is
+ignored. `path` must be an absolute output folder. Files are named
+`ViewCapture_YYMMDD_HHMMSS.png`; existing files are not overwritten.
+
+Capture temporarily fits the last generated composition, disables the ground
+plane and captures at three times the viewport width and height. It retains the
+view direction/display mode and restores the original viewport/ground-plane state
+afterwards. The alpha silhouette is cropped to visible pixels, then `border`
+adds 0-10000 whole pixels per side. `resolution` sets positive, finite dpi metadata
+(default: 300), **not pixel dimensions**. Final images are limited to 64 megapixels.
+Hide unrelated visible Rhino/GH objects before capture: they would appear too.
+Ground-plane shadows are not captured.
+
+### Validation scope
+
+These modules require RhinoCommon and the Rhino/.NET runtime; they are not a
+standalone CPython geometry application. This checkout does not include the
+previously described automated composition/cache test suite.
+
+When evaluating geometry in Rhino, compare the chosen view with the reference and
+exercise zero controls, slider endpoints, combined controls, cache recomputation
+and view/export buttons. Visual agreement and Rhino solid/Boolean behavior cannot
+be established from Python syntax checks alone.
