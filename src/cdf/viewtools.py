@@ -113,7 +113,7 @@ def caputreview(path: str, transparent_background: bool, background_color,
     positive, finite print-resolution metadata in dpi (default: 300), not pixels.
     Cropping and border determine the final dimensions, limited to 64 megapixels.
     Every call exports; gate calls in GH if needed. Existing files are not replaced.
-    Return the absolute output file path. The historical API spelling is retained.
+    Return the absolute output file path.
     """
 
     from datetime import datetime
