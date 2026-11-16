@@ -1,4 +1,10 @@
-"""Model-viewport persistence and cropped PNG export for Rhino / Grasshopper."""
+"""Model-viewport persistence and cropped PNG export for Rhino / Grasshopper.
+
+Use getview() for s_view, setview() for r_view and caputreview() for c_export.
+Capture inputs match the GH block: c_path, c_back, c_color, c_res and c_border.
+"""
+
+from pathlib import Path
 
 def _active_view():
     import Rhino
@@ -10,17 +16,19 @@ def _active_view():
     return view
 
 
-def getview(path):
+def getview(path=None):
     """Save the active model viewport's camera, projection and framing to JSON.
 
-    Saved viewports use absolute model coordinates, not coordinates relative to
-    scale/origin. Colors and the display mode are not saved. Return the file path.
+    Default destination: view.json beside this module. Saved viewports use
+    absolute model coordinates, not coordinates relative to scale/origin.
+    Colors and the display mode are not saved. Return the file path.
     """
     import json
-    from pathlib import Path
 
     import Rhino
 
+    if path is None:
+        path = Path(__file__).resolve().with_name("view.json")
     view = _active_view()
     info = Rhino.DocObjects.ViewportInfo(view.ActiveViewport)
     try:
@@ -48,19 +56,27 @@ def getview(path):
     return str(destination)
 
 
-def setview(path, scale, origin):
+def setview(path=None, scale=None, origin=None):
     """Restore a saved viewport, or fit a reference-format view to scale/origin.
 
+    Defaults: view.json beside this module and assignment_01.scale/origin.
     A viewport written by getview() restores its absolute camera and framing
     without another zoom-to-extents. A reference-format file instead transforms
     its stored target, offset and bounds using scale/origin and fits those bounds.
     """
     import json
-    from pathlib import Path
 
     import Rhino
     import Rhino.Geometry as rg
 
+    if path is None:
+        path = Path(__file__).resolve().with_name("view.json")
+    if scale is None or origin is None:
+        from . import assignment_01
+        if scale is None:
+            scale = assignment_01.scale
+        if origin is None:
+            origin = assignment_01.origin
     data = json.loads(Path(path).read_text(encoding="utf-8"))
     if data.get("version") != 1 or data.get("kind") not in ("reference", "viewport"):
         raise ValueError("Unsupported view JSON version or kind.")
@@ -92,8 +108,25 @@ def setview(path, scale, origin):
     view.Redraw()
     return True
 
-def caputreview(path: str, transparent_background: bool, background_color,
-                border: int, geometry, resolution: float = 300):
+
+def caputreview(c_path: str, c_back: bool = False, c_color=None,
+                c_border: int = 0, c_res: float = 300):
+    """Export a cropped PNG on every call; gate with c_export in the GH view block.
+
+    c_path is an absolute output folder. c_back accepts 1/True for transparency
+    or 0/False for an opaque c_color from GH/System.Drawing. c_border adds final
+    image pixels on each side. c_res sets print metadata in dpi (default: 300),
+    not pixel dimensions. Capture fits the visible scene using Rhino ZoomExtents,
+    temporarily disables the ground plane, then restores the original view.
+    No assignment function needs to have run before exporting.
+    """
+    return _capture_view(
+        c_path, c_back, c_color, c_border, resolution=c_res,
+    )
+
+
+def _capture_view(path: str, transparent_background: bool, background_color,
+                  border: int, resolution: float = 300):
     """Export a tightly cropped PNG with a pixel border on every side.
 
     path: absolute output folder. Filename: ViewCapture_YYMMDD_HHMMSS.png.
@@ -101,13 +134,13 @@ def caputreview(path: str, transparent_background: bool, background_color,
         background_color (System.Drawing.Color or a wrapped GH color).
         The supplied color's alpha is ignored for an opaque background.
     border: whole pixels from 0 to 10000 in the final image, independent of dpi.
-    Run composition() and let its document objects/GH preview update first;
-    preferably trigger export with a button in a separate GH component.
-    Hide unrelated visible Rhino/GH objects: they would also appear in the image.
+    Let document objects/GH preview update first; preferably trigger export with
+    a button in a separate GH component. Rhino ZoomExtents fits the entire visible
+    scene, not a particular assignment or selection. Hidden objects/layers remain
+    hidden. Preview geometry participates if its display conduit supplies extents.
     The ground plane is temporarily disabled, so its shadows are not captured.
-    Framing uses the supplied geometry, which the public wrapper takes from the
-    last composition() call. View direction and display mode are retained; the
-    original viewport and ground-plane state are restored after capture.
+    View direction and display mode are retained; the original viewport and
+    ground-plane state are restored after capture.
     The alpha silhouette is cropped to visible pixels, then border is added.
     Capture uses three times the viewport's width and height. resolution sets
     positive, finite print-resolution metadata in dpi (default: 300), not pixels.
@@ -142,8 +175,6 @@ def caputreview(path: str, transparent_background: bool, background_color,
     if not 0 <= border <= 10000 or int(border) != border:
         raise ValueError("border must be a whole number of pixels between 0 and 10000.")
     border = int(border)
-    if not geometry:
-        raise RuntimeError("Call composition() before exporting.")
     if not isinstance(path, str) or not path.strip():
         raise ValueError("path must be an absolute folder path.")
     folder = Path(path).expanduser()
@@ -176,15 +207,9 @@ def caputreview(path: str, transparent_background: bool, background_color,
     bitmap = None
     output = None
     try:
-        bounds = Rhino.Geometry.BoundingBox.Empty
-        for shape in geometry:
-            bounds.Union(shape.GetBoundingBox(True))
-        if not bounds.IsValid:
-            raise RuntimeError("The composition has no valid geometry bounds.")
-        bounds.Inflate(max(bounds.Diagonal.Length * 0.05, 0.001))
-        if not viewport.ZoomBoundingBox(bounds):
-            raise RuntimeError("Could not fit the entire composition in the viewport.")
         ground.Enabled = False
+        if not viewport.ZoomExtents():
+            raise RuntimeError("Could not fit the visible Rhino scene in the viewport.")
         view.Redraw()
         bitmap = settings.CaptureToBitmap(view)
         if bitmap is None:
@@ -192,7 +217,7 @@ def caputreview(path: str, transparent_background: bool, background_color,
         left, top, width, height = _capture_bounds(bitmap)
         if (left == 0 or top == 0 or left + width == bitmap.Width
                 or top + height == bitmap.Height):
-            raise RuntimeError("Geometry touches the capture border; hide unrelated objects.")
+            raise RuntimeError("Geometry touches the capture border; check scene extents and GH preview bounds.")
         out_width, out_height = width + 2 * border, height + 2 * border
         if out_width * out_height > 64000000:
             raise ValueError("Image exceeds the 64-megapixel limit; reduce border or viewport size.")

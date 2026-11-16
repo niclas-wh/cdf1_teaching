@@ -1,283 +1,238 @@
-# Computational Design and Fabrication 1 (CDF1)
+﻿# Computational Design and Fabrication 1 (CDF1)
 
-## Welcome
+Beginner-friendly computational design with Python in **Rhino 8 / Grasshopper**.
+Use **Python 3 Script** components and add this repository's `src` folder to
+Rhino's Python module search paths.
 
-Welcome to **Computational Design and Fabrication**, a platform dedicated to beginner-friendly creative coding tutorials and exercises for computational design and fabrication in architecture.
+## Assignment 01: Grasshopper blocks
 
+Open [assignment-01.gh](assignments/01/assignment-01.gh). The **geometry** block
+creates the architectural composition; the **view** block saves/restores the
+camera and exports PNG images. Input and output names are case-sensitive.
 
-<!-- ## Session Blocks 
+### Block: geometry
 
-Title | Description | Slides | Session material | Assignment 
------ | ----------- | ------ | ---------------- | ---------- -->
-<!-- **01a Python Basics** | Quick start on Python | [Python Basics](https://github.com/computationaldesignandfabrication/cdf1_teaching/blob/main/sessions-slides/Session%2001%20Python%20Basics.pdf) | [Session 01a](https://classroom.github.com/a/0gVDlBH0) |[Assignment 01a](https://classroom.github.com/a/gEZq-xda)
-**01b Rhino Basics** | Quick start on Rhino | [Rhino Basics](https://github.com/computationaldesignandfabrication/cdf1_teaching/blob/main/sessions-slides/Session%2001%20Rhino%20Basics.pdf) |  |
-**02 Geometry 2D** | 2D geometry  | [Geometry 2D](https://github.com/computationaldesignandfabrication/cdf1_teaching/blob/main/sessions-slides/Session%2002%20Geometry%202D.pdf) | [Session 02](https://classroom.github.com/a/tBISN_ul) | [Assignment 02](https://classroom.github.com/a/FkT2TYiD)
-**03 Basic Geometry 3D** | 3D primitive geometry  | [Geometry 3D](https://github.com/computationaldesignandfabrication/cdf1_teaching/blob/main/sessions-slides/Session%2003%20Basic%20Geometry%203D.pdf) | [Session 03](https://classroom.github.com/a/331M5qJj) | [Assignment 03](https://classroom.github.com/a/piywCTG7)
-**04 Meshses** | Meshes and mesh operations | [Meshes](https://github.com/computationaldesignandfabrication/cdf1_teaching/blob/main/sessions-slides/Session%2004%20Meshes.pdf) |  [Session 04](https://classroom.github.com/assignment-invitations/380e9596c1d28ade12d9917156004a25/status) | [Assignment 04](https://classroom.github.com/assignment-invitations/6641726eccea3b9db9017547b04649f2/status)
-**05 Integrated Representations** | Integrated design and fabrication representations | [Integrated Representation](https://github.com/computationaldesignandfabrication/cdf1_teaching/blob/main/sessions-slides/Session%2005%20Integrated%20Representations.pdf) | [Session 05](https://classroom.github.com/a/J5fiLqqq) |
-**06 Design Algorithms** | Generative methods for creating form and structure | [Design Algorithms](https://github.com/computationaldesignandfabrication/cdf1_teaching/blob/main/sessions-slides/Session%2006%20Design%20Algorithms.pdf) | [Session 06](https://classroom.github.com/a/5SiJajj8) |
-**07 Structural Form Finding** | Geometric form finding for compression-only structures | [Structural Form Finding]() | [Session 07]() | -->
+[assignment_01.composition()](src/cdf/assignment_01.py) creates a composition with
+arched facades, a sphere tower, fins and colored volumes. All six sliders accept
+**-10 to 10**, with **0** producing the reference layout.
 
-
-## Requirements
-
-* Rhino 8 / Grasshopper
-* [Github Desktop](https://desktop.github.com/)
-* [Visual Studio Code](https://code.visualstudio.com/)
-
-## Installation
-
-### Cloning the CDF Repository to your workstation
-
-1. Create a **workspace** folder in File Explorer:
-
-    `C:\Users\your_username\workspace`
-
-2. Open **GitHub Desktop** and click **Current Repository** (top left), then **Add > Clone Repository...**.
-
-3. Select the **URL** tab and paste:
-
-    `https://github.com/computationaldesignandfabrication/cdf1_teaching.git`
-
-4. Set the **Local Path** (bottom) so it looks like:
-
-    `C:\Users\your_username\workspace\cdf1_teaching`
-
-5. Click **Clone**.
-
-### Setting up your GitHub Copilot account
-
-1. Create a free [GitHub account](https://github.com/signup) if you do not have one yet.
-
-2. As a TUM student, you are eligible for free **GitHub Pro** and **GitHub Copilot Pro**. Request them by following the [TUM GitHub guide](https://collab.dvb.bayern/spaces/TUMsoftware/pages/2662964764/GitHub) (TUM login required).
-
-### Setting up VS Code and extensions
-
-1. Install the extensions. Open the Extensions panel (`Ctrl+Shift+X`), search for each one and click **Install**:
-    * **Python** (by Microsoft): syntax highlighting and code help for Python files.
-    * **GitHub Copilot** (by GitHub): the AI assistant. This also installs **GitHub Copilot Chat**.
-
-2. Log in to your Copilot account:
-    * Click the Copilot icon in the VS Code status bar (bottom right) or the account icon (bottom left) and choose **Sign in with GitHub**.
-    * Sign in with your GitHub account in the browser and authorize VS Code.
-
-3. Check that it works: open the Copilot Chat panel (`Ctrl+Alt+I`) and send a short message. If you get an answer, you are ready.
-
-### Setting up Rhino/Grasshopper
-
-This tells Rhino's Python where to find the CDF code, so you can `import` it in Grasshopper.
-
-1. Open **Rhino 8** and start **Grasshopper** (type `Grasshopper` in the Rhino command line).
-
-2. Add a **Python 3 Script** component to the canvas. The first time, wait for it to finish loading.
-
-3. Double-click the component to open the script editor.
-
-4. In the editor's top bar, go to **Tools > Options**.
-
-5. Open the **Python 3** tab.
-
-6. Under **Module search paths**, click **+** and add the path to the `src` folder of your cloned repository:
-
-    `C:\Users\your_username\workspace\cdf1_teaching\src`
-
-7. Click **Save**.
-
-8. Check that it works: in the component, run `import cdf` (or one of the CDF modules). If there is no error, the path is set up correctly.
-
-
-**Done! Now you can go to VS Code, Rhino, or Grasshopper to run the example files of CDF.**
-
----
-
-# Assignment 01
-
-## Parametric composition: Rhino layers and editable geometry
-
-The [composition generator](src/cdf/assignment_01.py) approximates an architectural
-reference using arched facades, circular recesses, fins, a sphere tower and primary
-colors. It is not a dimensionally accurate reconstruction; hidden backs are inferred.
-
-Z points up. The central facade faces **-Y**. The right wing is rotated **+90 degrees**
-around `(28, -3)` and then offset as an assembly, so its windows face **+X** and its
-length extends along **+Y**. Its horizontal fins sit on the short end face. To see
-both facades, view the composition from the **positive-X/negative-Y side**.
-`composition()` does not change the camera. `cdf.scale` and `cdf.origin` apply global
-scale and translation after the local rotations and assembly offsets.
-
-### Controls
-
-[composition()](src/cdf/__init__.py) accepts six controls in the inclusive range
-**-10 to 10**. Six zeros produce the current reference layout. Nonfinite or
-out-of-range values raise an error.
-
-| Control | Effect | Values at -10 / 0 / 10 |
+| Input | Effect | Values at -10 / 0 / 10 |
 | --- | --- | --- |
-| `u` | Right-wing length, both window rows, backing, beams and tapered roof ribs | 1 / 3 / 7 windows per row |
-| `v` | Different diameter factors for the left sphere tower's shaft, sphere, collars and red tip | Approximately -20-35% / unchanged / +20-35% per part |
-| `w` | Sphere-tower height; sphere, collars and top cap move with the shaft | Nominal height factor 0.6 / 1.0 / 1.4 |
-| `x` | Central facade height, shelf count, black enclosure, segmented column and roof elements | 2 / 5 / 9 storeys |
-| `y` | Colored boxes and the small yellow foot cylinder; connected blue L-shaped parts share their transform | Approximately -20-35% / unchanged / +20-35%, subject to connection limits |
-| `z` | Left-wing fins, portal, half-cylinders, chimney and growing black platform | 1 / 5 / 13 fins; half-cylinder factor 0.6 / 1.0 / 1.8 |
+| `u` | Right-wing length and window count | 1 / 3 / 7 windows per row |
+| `v` | Diameters of the sphere tower's parts | Smaller / reference / larger; approximately Â±20â€“35% per part |
+| `w` | Sphere-tower height | Nominal factor 0.6 / 1.0 / 1.4 |
+| `x` | Central facade height and storey count | 2 / 5 / 9 storeys |
+| `y` | Size of colored boxes and the yellow foot cylinder | Smaller / reference / larger; approximately Â±20â€“35%, subject to connection limits |
+| `z` | Left-wing fins and half-cylinders | 1 / 5 / 13 fins; half-cylinder factor 0.6 / 1.0 / 1.8 |
 
-Window, storey and fin counts change in rounded grid steps, not continuously.
-Half steps round away from the reference count. Each sign uses its own range
-between zero and its endpoint. The central storey pitch stays at 9 model units;
-the right-wing rectangular and arched windows retain pitches of 10.5 and 10 units.
-Other dimensions vary continuously, with clearance and connection limits applied.
+Counts change in discrete steps; other dimensions vary continuously.
 
-The size factors for `v` and `y` are reproducible for each part key and `cdf.seed`
-(default: `100`), independent of the current window/storey counts. Changing the
-seed does not change the zero-control layout. Only the left sphere tower responds
-to `v` and `w`; the central light-colored column responds to `x` instead.
-
-The generator maintains these connections:
-
-- Right-wing beams keep their inner ends fixed. `u` changes only their length
-  outward; `y` changes their cross-section and outer overhang.
-- Connected blue L-shaped parts use a shared factor and anchor. The blue facade
-  strip and left red portal block end at least 1 unit below their adjacent facades.
-- The shaft enclosure starts at the central facade's underside, `Z=26`, and ends
-  at the central column's rear edge. Its blue cap always covers the full footprint,
-  even when `y` is negative; thickness can still shrink.
-- Roof blocks grow away from the shaft. The red eye block is 26 units high at
-  zero controls, with its opening center 17 units above its base.
-- Right-window outer chamfers reach the facade plane; their straight outer sections
-  are embedded in the wall. The left portal has a fixed 2-unit width allowance.
-- Horizontal joints in both stacked window facades and the segmented column are
-  0.24 units wide. All listed dimensions are before global scaling/translation.
-
-### Grasshopper integration
-
-Use Python 3 in Rhino 8. Update the embedded code in
-[assignment-01.gh](assignments/assignment-01.gh) in the Grasshopper script editor;
-the Python package does not rewrite the GH file.
-
-1. Keep the existing AutoReloader, path monitoring and view/capture buttons.
-2. Connect six sliders with a range of -10 to 10 and a default of 0. After importing
-   or reloading `cdf`, forward the inputs to the composition call. For inputs named
-   `U` through `Z`, use:
-
-   ```python
-   a = cdf.composition(
-       u=U, v=V, w=W, x=X, y=Y, z=Z,
-       cache_id=str(ghenv.Component.InstanceGuid),
-   )
-   ```
-
-   If the component inputs use lowercase names, use those names on the right-hand
-   side instead. Match `a` to the actual output name, such as `A` if capitalized.
-   The return value is **one flat list of Breps**, not five separate color outputs.
-3. With the default `bake=True`, **disable preview** for this Python component and
-   downstream preview components. Otherwise GH preview may cover the cached Rhino
-   objects' material colors. The geometry output remains available for further use.
-4. Recompute. Editable objects are synchronized into five material layers under
-   `CDF_Composition`; no separate Bake or Content Cache component is required.
-5. Use **Rendered** or **Raytraced** for material appearance. Shaded uses layer
-   colors but does not produce the same lighting/material response. Choose a view
-   from the positive-X/negative-Y side and save it with `cdf.getview()` when ready.
-
-### Layers and materials
-
-The [layer manager](src/cdf/layer.py) assigns both object color and render material
-**by layer**, using these labels and RGB values:
-
-| Layer under `CDF_Composition` | RGB |
+| Output | Content |
 | --- | --- |
-| `01_Ivory` | `(226, 212, 192)` |
-| `02_Anthracite` | `(37, 38, 36)` |
-| `03_Ultramarine` | `(6, 38, 145)` |
-| `04_Vermilion` | `(228, 12, 18)` |
-| `05_SunYellow` | `(255, 190, 5)` |
-
-Render-material names use the root and child label, for example
-`CDF_Composition_03_Ultramarine`. Blue, red and yellow have zero shine and
-reflectivity, with a black specular color. Ivory and anthracite retain their
-configured low shine/reflectivity. Document-controlled layer properties apply
-immediately; material changes are committed through the material table.
-
-On updating an older document, the layer manager can identify an existing
-composition root through cache-owned objects and reuse uniquely numbered child
-layers. These layers and their matching CDF materials are renamed in place rather
-than creating a second layer tree. Ambiguous candidates raise an error instead of
-renaming an arbitrary tree. Unrelated layers are not renamed.
-
-**The English labels change the palette fingerprint. The next recompute refreshes
-owned geometry, so preserve any manual variants before recomputing.** Ownership
-and cache metadata keys remain unchanged.
-
-### Cache behavior and limitations
-
-- Cache state belongs to the active **Rhino document**, not the Grasshopper document.
-  The returned geometry list alone carries no Rhino layer/material attributes.
-- Identical generated geometry and palette inputs do not create duplicates, even
-  after module reload. Manual object edits, layer changes and deletions remain
-  while those inputs stay unchanged.
-- The returned geometry is always the generated geometry, not manually edited
-  cache objects. PNG framing also uses the last generated geometry's bounds.
-- Changes to generated geometry, global scale/origin or the palette replace only
-  objects marked with the same `cache_id`; their manual edits are lost. To preserve
-  a variant, copy its objects and remove the `cdf.composition.owner` user text from
-  the copies before recomputing. Unmarked objects are never automatically deleted.
-- `force=True` explicitly replaces the cache even when inputs have not changed,
-  including after manual deletion. Remove it after the reset. Locked/reference
-  cache objects prevent replacement and raise an error.
-- Use a distinct `cache_id` per GH component, for example its `InstanceGuid`.
-  Omitting it uses `default`, so multiple callers would share the same cache.
-- Save the Rhino document as `.3dm` to retain objects, layers, materials and cache
-  state. Removing the GH component does not remove cached Rhino objects.
-- `bake=False` returns geometry without adding/updating document objects; existing
-  cached objects remain. Enable GH preview separately if a preview-only workflow
-  is desired; the output list itself does not contain layer/material attributes.
-
-### Saved views and PNG export
-
-[viewtools.py](src/cdf/viewtools.py) provides the existing public view helpers:
-
-- `cdf.getview()` saves the active model viewport's camera, projection and framing
-  to [view.json](src/cdf/view.json), replacing the file atomically. Saved viewports
-  use absolute model coordinates, not coordinates relative to `scale`/`origin`.
-  Colors and display mode are not saved.
-- `cdf.setview()` restores that saved viewport without another zoom-to-extents.
-  It also supports a reference-format JSON file, whose camera/bounds are transformed
-  by `scale`/`origin`. Layout pages are not supported by these helpers.
-- `cdf.caputreview(...)` exports on every call. The historical function spelling
-  is retained for compatibility. Gate it with a button rather than calling it on
-  every slider update, and let the composition/document preview update first.
-
-Example capture call, after generating the composition:
+| `a` | One flat list of Breps for further use in GH |
+| `out` | Python messages and errors |
 
 ```python
-if capture:
-    image_path = cdf.caputreview(
-        r"C:\Users\your_username\Pictures\CDF",
-        transparent_background=True,
-        border=32,
-        resolution=300,
-    )
+from cdf import assignment_01
+
+a = assignment_01.composition(u=u, v=v, w=w, x=x, y=y, z=z)
 ```
 
-For an opaque background, use `transparent_background=False` and provide
-`background_color` from a GH color input or `System.Drawing.Color`. Its alpha is
-ignored. `path` must be an absolute output folder. Files are named
-`ViewCapture_YYMMDD_HHMMSS.png`; existing files are not overwritten.
+The function also creates editable Rhino objects on five material layers under
+`CDF_Composition`: ivory, anthracite, ultramarine, vermilion and yellow. Disable
+GH preview for this block and downstream geometry when displaying these Rhino
+objects. Use **Rendered** or **Raytraced** for material appearance.
 
-Capture temporarily fits the last generated composition, disables the ground
-plane and captures at three times the viewport width and height. It retains the
-view direction/display mode and restores the original viewport/ground-plane state
-afterwards. The alpha silhouette is cropped to visible pixels, then `border`
-adds 0-10000 whole pixels per side. `resolution` sets positive, finite dpi metadata
-(default: 300), **not pixel dimensions**. Final images are limited to 64 megapixels.
-Hide unrelated visible Rhino/GH objects before capture: they would appear too.
-Ground-plane shadows are not captured.
+Optional module settings, assigned before the function call:
 
-### Validation scope
+| Setting | Meaning | Default |
+| --- | --- | --- |
+| `assignment_01.scale` | Positive global scale factor | `1.0` |
+| `assignment_01.origin` | Global translation `(x, y, z)` | `(0.0, 0.0, 0.0)` |
+| `assignment_01.seed` | Reproducible size variation for `v` and `y` | `100` |
 
-These modules require RhinoCommon and the Rhino/.NET runtime; they are not a
-standalone CPython geometry application. This checkout does not include the
-previously described automated composition/cache test suite.
+### Block: view
 
-When evaluating geometry in Rhino, compare the chosen view with the reference and
-exercise zero controls, slider endpoints, combined controls, cache recomputation
-and view/export buttons. Visual agreement and Rhino solid/Boolean behavior cannot
-be established from Python syntax checks alone.
+[viewtools](src/cdf/viewtools.py) provides three commands:
+
+| Function | Action | Return value |
+| --- | --- | --- |
+| `getview()` | Save the active model viewport's camera, projection and framing to [view.json](src/cdf/view.json) | Saved file path |
+| `setview()` | Restore the saved view | `True` on success |
+| `caputreview(...)` | Export the current view as a cropped PNG, framed around the last generated composition | PNG file path |
+
+| Input | Type / meaning |
+| --- | --- |
+| `s_view` | Button: save view |
+| `r_view` | Button: restore view |
+| `c_path` | Text: absolute export folder, e.g. `C:\Users\your_username\Pictures\CDF` |
+| `c_export` | Button: export PNG |
+| `c_back` | Boolean: `True` for transparent background, `False` for an opaque background |
+| `c_color` | GH color: background color when `c_back=False` |
+| `c_res` | Positive number: print resolution in dpi, e.g. `300` |
+| `c_border` | Integer: border width in pixels, from `0` to `10000` |
+
+| Output | Content |
+| --- | --- |
+| `out` | Saved view/PNG file paths, Python messages and errors |
+
+```python
+from cdf import viewtools
+
+if s_view:
+    print(viewtools.getview())
+
+if r_view:
+    viewtools.setview()
+
+if c_export:
+    print(viewtools.caputreview(
+        c_path=c_path,
+        c_back=c_back,
+        c_color=c_color,
+        c_res=c_res,
+        c_border=c_border,
+    ))
+```
+
+Connect **resolution (dpi)** to `c_res` and **border width (px)** to `c_border`.
+Use a Rhino model viewport, not a layout. Export fits the entire visible Rhino
+scene with ZoomExtents, independent of Assignment 1 or 2 and of the selection.
+Hidden objects and layers remain hidden; GH preview contributes to framing when
+its display conduit supplies extents. Let document/preview updates finish before
+exporting. No call to `composition()` is required.
+
+PNG files are named `ViewCapture_YYMMDD_HHMMSS.png`; existing files are not
+overwritten. Capture uses three times the viewport's pixel dimensions, crops the
+visible silhouette and adds `c_border`. `c_res` changes print-resolution metadata,
+not pixel dimensions. The original camera and ground-plane state are restored
+after export; ground-plane shadows are not captured.
+
+## Assignment 02.1: folded coral
+
+[assignment_02_1.py](src/cdf/assignment_02_1.py) creates a leaf-like coral as
+open, folded Breps, growing from a spline guide rooted at `(0, 0, 0)` toward +z.
+The narrow foot is centered on the origin. There is no wall thickness or polyp
+texture, and the leaves are not closed solids. Strong curling can cause leaves
+to overlap; a global self-intersection-free solid is not guaranteed.
+
+Use the existing Python 3 geometry component with item inputs:
+
+```python
+from cdf import assignment_02_1
+assignment_02_1.geometry(q, r, s, t,
+                       cache_id=str(ghenv.Component.InstanceGuid))
+ghenv.Component.Hidden = True
+```
+
+| Input | Meaning |
+| --- | --- |
+| `q` | Seed, 1–10; fractional values produce reproducible variations |
+| `r` | Steps, 1–10; number of growth intervals, rounded half upward |
+| `s` | Step Height, 1–10 model units; first interval height |
+| `t` | Curl, 1–10; increasing fold strength and frequency |
+
+Later interval heights are `s * 0.7**i`. The first interval forms the unbranched
+trunk and fan; each later interval doubles the number of leaf branches. Steps=10
+has 512 leaf ends and 1023 loft sections, so high settings can take longer.
+Each child starts on an exact half of its parent's upper profile. As intervals
+shrink, folds become more closely spaced in height. Defaults are Seed=1,
+Steps=6, Step Height=3.5, Curl=4.1. Finite controls are clamped to 1–10;
+non-numeric and non-finite inputs raise an error. Inputs `u` through `p` are
+currently unused and must not be passed to this function.
+
+Breps automatically synchronize to `CDF_Coral::01_Coral`, muted peach
+RGB `(224, 174, 145)`, using the existing component-owned layer cache. Recomputing
+does not accumulate duplicates or replace other components' objects. Pass a
+unique `cache_id` per component; `force=True` restores manually deleted cached
+objects. `geometry()` returns `None`; `create_geometry()` returns the Brep group
+without baking. Use Rendered display to see the layer material.
+
+## Assignment 2: planar pattern tiles
+
+Use a Python 3 Grasshopper component with item inputs `q, r, s, t, u, v, w, x, y, z, p`:
+
+```python
+from cdf import assignment_02
+assignment_02.geometry(q, r, s, t, u, v, w, x, y, z, p,
+                      cache_id=str(ghenv.Component.InstanceGuid))
+ghenv.Component.Hidden = True
+```
+
+No cache switch or geometry output is needed: curves are always synchronized to
+Rhino, without duplicate GH preview. Existing owned pipes are replaced on the
+first run. Other components' objects are untouched.
+
+| Input | Meaning |
+| --- | --- |
+| `q` | Size: 1–20 gives 1×1 to 20×20 tiles |
+| `r` | Tile size: 1–10 maps to 5–50 model units |
+| `s` | Border print width: input / 10 mm |
+| `t` | Pattern print width: input / 10 mm |
+| `u` | Curvature: 0–10; zero uses exact quarter circles |
+| `v` | Curve seed: 0–10, fractional values supported |
+| `w, x, y, z` | Patterns 1–14 for rows 1–4, repeated vertically |
+| `p` | Pattern distinction: dark blue/red if true, both black otherwise |
+Size and pattern selections round to the nearest integer (halves upward) and
+clamp to their ranges. Widths accept **any positive finite number**, including
+values below 1 or above 10. Zero/negative widths are rejected. PlotWeight is a
+physical print width, not a model-space thickness. PrintDisplay is enabled on
+each call. Very thick strokes may visually overlap although centerlines do not.
+
+The square field is centered at the origin; all curves lie at Z=0. Row 1 is at
++Y; words repeat left to right and the final repetition is truncated. B and R
+refer only to the two tile orientations, not to display colors:
+
+| Pattern | Repeated word |
+| --- | --- |
+| 1 | B |
+| 2 | R |
+| 3 | BR |
+| 4 | RB |
+| 5 | BBR |
+| 6 | RRB |
+| 7 | BBRR |
+| 8 | RRBB |
+| 9 | BBBR |
+| 10 | RBBB |
+| 11 | BBBRR |
+| 12 | RRBBB |
+| 13 | BBBRRR |
+| 14 | RRRBBB |
+
+Blue connects west–south and north–east; red connects west–north and south–east.
+Curves meet at edge midpoints with perpendicular tangents. At zero curvature,
+exact quarter circles are used. Positive curvature uses degree-five Bezier
+splines with two fixed endpoints and four inner control points. The two tangent
+handles lie on the edge normals, independently spaced between one eighth and
+one quarter tile width from their edges. The two free points have a minimum
+separation of 0.25 + 0.20 × normalized curvature tile widths (0.25–0.45).
+Thus their required separation grows with line curve, although individual random
+samples need not change monotonically. The entire control polygon must be
+non-self-intersecting, including nonadjacent touches/overlaps.
+The other two points are sampled inside
+the area between the two reference quarter circles: each free point must be
+at least half a tile width from both relevant opposite corners. This condition
+is checked after curvature blending as well. Points and curves may cross the
+tile diagonal. Inflections are allowed again; this rule constrains the free
+control points, not the entire curve relative to the reference circles.
+Each pair is checked for self-intersections and mutual intersections
+(including touches/overlaps). Conflicting deformations are deterministically
+reduced; persistent conflicts fall back to the two reference quarter circles.
+Convex-hull containment keeps all curves inside their tile.
+Curvature blends a circle-like Bezier reference toward the random controls.
+Only the zero setting is exactly circular. Curve seed gives reproducible local
+randomness. Shared borders are emitted only once.
+
+Three layers are always used: `CDF_Tiles::01_TileBorders` (black),
+`CDF_Tiles::02_BlueTiles` and `CDF_Tiles::03_RedTiles`. Pattern distinction toggles
+the form layers between black and dark blue (0,0,139) / dark red (139,0,0).
+Existing owned curves are migrated on recompute; unrelated objects are untouched.
+The shared `layer.cache_geometry` accepts optional `plot_weights` in millimeters
+per geometry group. Assignment 1 retains its existing cache behavior.
+Width/color changes refresh owned objects; unchanged inputs preserve manual edits.
+Use `force=True` to rebuild unchanged owned objects.
+Run regression tests with `python -m unittest discover -s tests`.
+Actual spline/intersection operations, PrintDisplay and PNG stroke rendering
+must additionally be checked inside Rhino 8.
+

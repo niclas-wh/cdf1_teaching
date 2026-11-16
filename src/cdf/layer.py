@@ -1,4 +1,4 @@
-"""Material layers and a persistent, component-owned Rhino geometry cache."""
+﻿"""Material layers and a persistent, component-owned Rhino geometry cache."""
 
 import hashlib
 
@@ -7,16 +7,16 @@ from System import Guid
 from System.Drawing import Color
 
 
-# RGB, shine (0-255), reflectivity (0-1): warm ivory and matte primary colors.
-PALETTE = {
-    "white": ("01_Ivory", (226, 212, 192), 22.0, 0.02),
-    "black": ("02_Anthracite", (37, 38, 36), 18.0, 0.01),
-    "blue": ("03_Ultramarine", (6, 38, 145), 0.0, 0.0),
-    "red": ("04_Vermilion", (228, 12, 18), 0.0, 0.0),
-    "yellow": ("05_SunYellow", (255, 190, 5), 0.0, 0.0),
-}
+def _palette(palette):
+    if palette is None:
+        from .assignment_01 import PALETTE
+        return PALETTE
+    return palette
+
+
 ROOT = "CDF_Composition"
 OWNER_KEY = "cdf.composition.owner"
+ROOT_KEY = "cdf.cache.root"
 STATE_SECTION = "cdf.composition.cache.v1"
 
 
@@ -27,16 +27,19 @@ def _document(doc):
     return doc
 
 
-def _root_index(doc):
-    index = doc.Layers.FindByFullPath(ROOT, -1)
+def _root_index(doc, palette, root):
+    index = doc.Layers.FindByFullPath(root, -1)
     if index >= 0:
         return index
+    if root != ROOT:
+        return -1
     # Ownership tags and numeric prefixes identify older names without translating
     # arbitrary user layers or depending on a particular previous display language.
-    prefixes = tuple(name[:3] for name, *_ in PALETTE.values())
+    prefixes = tuple(name[:3] for name, *_ in palette.values())
     parent_ids = set()
     for obj in doc.Objects.GetObjectList(Rhino.DocObjects.ObjectType.AnyObject):
-        if obj.Attributes.GetUserString(OWNER_KEY):
+        if (obj.Attributes.GetUserString(OWNER_KEY)
+                and obj.Attributes.GetUserString(ROOT_KEY) in (None, "", root)):
             item = doc.Layers[obj.Attributes.LayerIndex]
             if item.Name.startswith(prefixes):
                 parent_ids.add(item.ParentLayerId)
@@ -44,12 +47,12 @@ def _root_index(doc):
                   if not item.IsDeleted and item.Id in parent_ids
                   and item.ParentLayerId == Guid.Empty and item.Name.startswith("CDF_")]
     if len(candidates) > 1:
-        raise RuntimeError("Multiple cached composition roots found; rename the intended root to " + ROOT)
+        raise RuntimeError("Multiple cached composition roots found; rename the intended root to " + root)
     return candidates[0] if candidates else -1
 
 
-def _child_index(doc, parent_id, name):
-    index = doc.Layers.FindByFullPath(ROOT + "::" + name, -1)
+def _child_index(doc, parent_id, name, root):
+    index = doc.Layers.FindByFullPath(root + "::" + name, -1)
     if index >= 0:
         return index
     candidates = [item.Index for item in doc.Layers
@@ -60,7 +63,7 @@ def _child_index(doc, parent_id, name):
     return candidates[0] if candidates else -1
 
 
-def ensure_layers(doc=None):
+def ensure_layers(doc=None, *, palette=None, root=ROOT):
     """Create/update managed layers and materials, reusing older display names.
 
     A tagged composition root and uniquely numbered child layers are renamed in
@@ -68,26 +71,27 @@ def ensure_layers(doc=None):
     their names match the previous child labels. Ownership/cache keys stay stable.
     """
     doc = _document(doc)
-    root_index = _root_index(doc)
+    palette = _palette(palette)
+    root_index = _root_index(doc, palette, root)
     if root_index < 0:
         parent = Rhino.DocObjects.Layer()
-        parent.Name = ROOT
+        parent.Name = root
         root_index = doc.Layers.Add(parent)
     if root_index < 0:
         raise RuntimeError("Could not create the CDF root layer.")
     parent = doc.Layers[root_index]
-    parent.Name = ROOT
+    parent.Name = root
     parent_id = parent.Id
     indices = {}
-    for key, (name, rgb, shine, reflection) in PALETTE.items():
-        index = _child_index(doc, parent_id, name)
+    for key, (name, rgb, shine, reflection) in palette.items():
+        index = _child_index(doc, parent_id, name, root)
         previous_name = None
         previous_material_index = -1
         if index >= 0:
             item = doc.Layers[index]
             previous_name = item.Name
             previous_material_index = item.RenderMaterialIndex
-        material_name = ROOT + "_" + name
+        material_name = root + "_" + name
         material_index = doc.Materials.Find(material_name, True)
         if material_index < 0 and 0 <= previous_material_index < doc.Materials.Count:
             previous_material = doc.Materials[previous_material_index]
@@ -101,7 +105,7 @@ def ensure_layers(doc=None):
         material = doc.Materials[material_index]
         material.Name = material_name
         material.DiffuseColor = Color.FromArgb(*rgb)
-        specular = 0 if key in ("blue", "red", "yellow") else 240
+        specular = 0 if shine == 0 else 240
         material.SpecularColor = Color.FromArgb(specular, specular, specular)
         material.Shine = shine
         material.Reflectivity = reflection
@@ -124,9 +128,9 @@ def ensure_layers(doc=None):
     return indices
 
 
-def _fingerprint(groups):
-    digest = hashlib.sha256(repr(PALETTE).encode("utf-8"))
-    for key in PALETTE:
+def _fingerprint(groups, palette, root):
+    digest = hashlib.sha256(repr(palette).encode("utf-8"))
+    for key in palette:
         digest.update(key.encode("ascii"))
         digest.update(str(len(groups[key])).encode("ascii"))
         for shape in groups[key]:
@@ -134,7 +138,8 @@ def _fingerprint(groups):
     return digest.hexdigest()
 
 
-def cache_geometry(groups, cache_id="default", doc=None, *, force=False):
+def cache_geometry(groups, cache_id="default", doc=None, *, force=False, palette=None, root=ROOT,
+                   plot_weights=None):
     """Synchronize only owned objects, never every object on a layer.
 
     Identical geometry and palette inputs preserve manual edits and deletions.
@@ -142,21 +147,34 @@ def cache_geometry(groups, cache_id="default", doc=None, *, force=False):
     names are part of the fingerprint, so translating them also refreshes owned
     geometry on the next recompute. Cache state is stored in the Rhino document,
     surviving module reloads and saving/reopening a 3dm file.
+    Optional plot_weights maps each group to a positive print width in mm;
+    these widths are written to object attributes and included in cache state.
+    Omitting widths preserves the existing Assignment 1 fingerprint.
     """
     doc = _document(doc)
+    palette = _palette(palette)
     cache_id = str(cache_id)
     if not cache_id.strip():
         raise ValueError("cache_id must not be empty.")
-    if set(groups) != set(PALETTE):
-        raise ValueError("Exactly the five defined color groups are required.")
+    if set(groups) != set(palette):
+        raise ValueError("Geometry groups must match the supplied palette.")
     for shapes in groups.values():
         for shape in shapes:
             if shape is None or not shape.IsValid:
                 raise ValueError("Invalid geometry cannot be cached.")
-    signature = _fingerprint(groups)
+    signature = _fingerprint(groups, palette, root)
+    if plot_weights is not None:
+        import math
+        if set(plot_weights) != set(groups):
+            raise ValueError("Plot weights must match geometry groups.")
+        plot_weights = {key: float(value) for key, value in plot_weights.items()}
+        if any(not math.isfinite(value) or value <= 0 for value in plot_weights.values()):
+            raise ValueError("Plot weights must be positive finite millimeter values.")
+        signature = hashlib.sha256((signature + repr(sorted(plot_weights.items()))).encode("utf-8")).hexdigest()
+    owner_id = cache_id if root == ROOT else root + ":" + cache_id
     owned = [obj for obj in doc.Objects.GetObjectList(Rhino.DocObjects.ObjectType.AnyObject)
-             if obj.Attributes.GetUserString(OWNER_KEY) == cache_id]
-    if not force and doc.Strings.GetValue(STATE_SECTION, cache_id) == signature:
+             if obj.Attributes.GetUserString(OWNER_KEY) == owner_id]
+    if not force and doc.Strings.GetValue(STATE_SECTION, owner_id) == signature:
         return [obj.Id for obj in owned]
     if any(obj.IsLocked or obj.IsReference for obj in owned):
         raise RuntimeError("Owned cache objects are locked or referenced; make them editable before updating.")
@@ -164,15 +182,19 @@ def cache_geometry(groups, cache_id="default", doc=None, *, force=False):
     added = []
     deleted = []
     try:
-        indices = ensure_layers(doc)
-        for key in PALETTE:
+        indices = ensure_layers(doc, palette=palette, root=root)
+        for key in palette:
             for number, shape in enumerate(groups[key], 1):
                 attributes = Rhino.DocObjects.ObjectAttributes()
                 attributes.LayerIndex = indices[key]
+                if plot_weights is not None:
+                    attributes.PlotWeightSource = Rhino.DocObjects.ObjectPlotWeightSource.PlotWeightFromObject
+                    attributes.PlotWeight = plot_weights[key]
                 attributes.Name = "CDF_{}_{:03d}".format(key, number)
                 attributes.ColorSource = Rhino.DocObjects.ObjectColorSource.ColorFromLayer
                 attributes.MaterialSource = Rhino.DocObjects.ObjectMaterialSource.MaterialFromLayer
-                attributes.SetUserString(OWNER_KEY, cache_id)
+                attributes.SetUserString(OWNER_KEY, owner_id)
+                attributes.SetUserString(ROOT_KEY, root)
                 object_id = doc.Objects.Add(shape, attributes)
                 if object_id == Guid.Empty:
                     raise RuntimeError("Rhino could not add a cache object.")
@@ -182,7 +204,7 @@ def cache_geometry(groups, cache_id="default", doc=None, *, force=False):
             if not doc.Objects.Delete(obj.Id, True):
                 raise RuntimeError("Could not remove an old cache object.")
             deleted.append(obj.RuntimeSerialNumber)
-        doc.Strings.SetString(STATE_SECTION, cache_id, signature)
+        doc.Strings.SetString(STATE_SECTION, owner_id, signature)
     except Exception:
         for object_id in added:
             doc.Objects.Delete(object_id, True)
@@ -194,3 +216,4 @@ def cache_geometry(groups, cache_id="default", doc=None, *, force=False):
             doc.EndUndoRecord(undo)
         doc.Views.Redraw()
     return added
+
