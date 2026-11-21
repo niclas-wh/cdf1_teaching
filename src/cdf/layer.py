@@ -55,9 +55,15 @@ def _child_index(doc, parent_id, name, root):
     index = doc.Layers.FindByFullPath(root + "::" + name, -1)
     if index >= 0:
         return index
-    candidates = [item.Index for item in doc.Layers
-                  if not item.IsDeleted and item.ParentLayerId == parent_id
-                  and item.Name.startswith(name[:3])]
+    if root == "CDF_Coral":
+        # Only this known legacy layer belongs to the coral migration.
+        candidates = [item.Index for item in doc.Layers
+                      if not item.IsDeleted and item.ParentLayerId == parent_id
+                      and name == "01_Degree" and item.Name == "01_Coral"]
+    else:
+        candidates = [item.Index for item in doc.Layers
+                      if not item.IsDeleted and item.ParentLayerId == parent_id
+                      and item.Name.startswith(name[:3])]
     if len(candidates) > 1:
         raise RuntimeError("Multiple composition layers share the prefix " + name[:3])
     return candidates[0] if candidates else -1

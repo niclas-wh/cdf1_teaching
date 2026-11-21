@@ -1,238 +1,148 @@
-﻿# Computational Design and Fabrication 1 (CDF1)
+# Computational Design and Fabrication 1 (CDF1)
 
-Beginner-friendly computational design with Python in **Rhino 8 / Grasshopper**.
-Use **Python 3 Script** components and add this repository's `src` folder to
-Rhino's Python module search paths.
+A teaching and design project exploring parametric geometry with **Python 3 in Rhino 8 / Grasshopper**. The assignments combine architectural composition, organic surfaces and rule-based tile patterns.
 
-## Assignment 01: Grasshopper blocks
+## Project overview
 
-Open [assignment-01.gh](assignments/01/assignment-01.gh). The **geometry** block
-creates the architectural composition; the **view** block saves/restores the
-camera and exports PNG images. Input and output names are case-sensitive.
+| Assignment | Topic | Grasshopper file | Python module |
+| --- | --- | --- | --- |
+| 01 | Modular Metropolis – parametric architecture | [assignment-01.gh](assignments/01/assignment-01.gh) | [assignment_01.py](src/cdf/assignment_01.py) |
+| 02.1 | Sarcophyton – folded leather coral | [assignment-02-1.gh](assignments/02/assignment-02-1.gh) | [assignment_02_1.py](src/cdf/assignment_02_1.py) |
+| 02.2 | Truchet tiles – variable line patterns | [assignment-02-2.gh](assignments/02/assignment-02-2.gh) | [assignment_02_2.py](src/cdf/assignment_02_2.py) |
 
-### Block: geometry
+## Getting started
 
-[assignment_01.composition()](src/cdf/assignment_01.py) creates a composition with
-arched facades, a sphere tower, fins and colored volumes. All six sliders accept
-**-10 to 10**, with **0** producing the reference layout.
+1. Clone or download the repository and open **Rhino 8** with Grasshopper.
+2. Add the local `src` folder to the Python module search path. Update any existing absolute paths in the GH definitions to match your local location, e.g. `C:\Projects\cdf1_teaching\src`.
+3. Open the desired GH file and use **Python 3 Script**. Input names are case-sensitive; use **Item Access** for numbers and toggles.
+4. Adjust the sliders and view the geometry in the Rhino model viewport. Use **Rendered** or **Raytraced** to display materials.
+5. Set `c_path` in the view block to your own export folder.
 
-| Input | Effect | Values at -10 / 0 / 10 |
-| --- | --- | --- |
-| `u` | Right-wing length and window count | 1 / 3 / 7 windows per row |
-| `v` | Diameters of the sphere tower's parts | Smaller / reference / larger; approximately Â±20â€“35% per part |
-| `w` | Sphere-tower height | Nominal factor 0.6 / 1.0 / 1.4 |
-| `x` | Central facade height and storey count | 2 / 5 / 9 storeys |
-| `y` | Size of colored boxes and the yellow foot cylinder | Smaller / reference / larger; approximately Â±20â€“35%, subject to connection limits |
-| `z` | Left-wing fins and half-cylinders | 1 / 5 / 13 fins; half-cylinder factor 0.6 / 1.0 / 1.8 |
+The geometry functions synchronize their objects to Rhino layers. Disable GH preview for these blocks and any downstream geometry to avoid duplicate displays. For custom components, use a unique `cache_id=str(ghenv.Component.InstanceGuid)`. Unchanged inputs preserve manual object edits; `force=True` forces a rebuild of the associated objects.
 
-Counts change in discrete steps; other dimensions vary continuously.
+## Assignment 01 · Modular Metropolis
 
-| Output | Content |
+![Modular Metropolis: architectural composition with colored volumes, arched facades and a sphere tower](assignments/01/renders/modular_metropolis.png)
+
+A Bauhaus-inspired composition of arched facades, a sphere tower, fins and colored volumes. Six controls adjust proportions and repetition; **setting all values to 0** produces the reference form.
+
+### GH block: geometry
+
+All six inputs range from **−10 to 10**.
+
+| Input | Effect |
 | --- | --- |
-| `a` | One flat list of Breps for further use in GH |
-| `out` | Python messages and errors |
+| `u` | Right-wing length and window count: 1 / 3 / 7 per row at −10 / 0 / 10. |
+| `v` | Diameters of the sphere tower's shaft, sphere, collars and tip. |
+| `w` | Sphere-tower height; nominal factor from 0.6 to 1.4. |
+| `x` | Central facade height and storey count: 2 / 5 / 9 storeys. |
+| `y` | Size of the colored boxes and yellow foot cylinder; connections stay aligned. |
+| `z` | Left wing: 1 / 5 / 13 fins and the size of the half-cylinders. |
 
-```python
-from cdf import assignment_01
+**Output:** `a` contains a flat list of Breps; `out` displays messages. Editable Rhino objects are also created on five material layers under `CDF_Composition`.
 
-a = assignment_01.composition(u=u, v=v, w=w, x=x, y=y, z=z)
-```
+Optional module settings: `scale=1.0` for overall scale, `origin=(0, 0, 0)` for translation and `seed=100` for reproducible size variations of `v` and `y`.
 
-The function also creates editable Rhino objects on five material layers under
-`CDF_Composition`: ivory, anthracite, ultramarine, vermilion and yellow. Disable
-GH preview for this block and downstream geometry when displaying these Rhino
-objects. Use **Rendered** or **Raytraced** for material appearance.
+## Assignment 02.1 · Sarcophyton
 
-Optional module settings, assigned before the function call:
-
-| Setting | Meaning | Default |
-| --- | --- | --- |
-| `assignment_01.scale` | Positive global scale factor | `1.0` |
-| `assignment_01.origin` | Global translation `(x, y, z)` | `(0.0, 0.0, 0.0)` |
-| `assignment_01.seed` | Reproducible size variation for `v` and `y` | `100` |
-
-### Block: view
-
-[viewtools](src/cdf/viewtools.py) provides three commands:
-
-| Function | Action | Return value |
-| --- | --- | --- |
-| `getview()` | Save the active model viewport's camera, projection and framing to [view.json](src/cdf/view.json) | Saved file path |
-| `setview()` | Restore the saved view | `True` on success |
-| `caputreview(...)` | Export the current view as a cropped PNG, framed around the last generated composition | PNG file path |
-
-| Input | Type / meaning |
+| Surface view | Construction curves |
 | --- | --- |
-| `s_view` | Button: save view |
-| `r_view` | Button: restore view |
-| `c_path` | Text: absolute export folder, e.g. `C:\Users\your_username\Pictures\CDF` |
-| `c_export` | Button: export PNG |
-| `c_back` | Boolean: `True` for transparent background, `False` for an opaque background |
-| `c_color` | GH color: background color when `c_back=False` |
-| `c_res` | Positive number: print resolution in dpi, e.g. `300` |
-| `c_border` | Integer: border width in pixels, from `0` to `10000` |
+| ![Sarcophyton: folded crown with a rolled rim and stalk](assignments/02/renders/Sarcopython_Shade.png) | ![Sarcophyton: spatial profile curves of the folded coral](assignments/02/renders/Sarcopythgon_Lines.png) |
 
-| Output | Content |
-| --- | --- |
-| `out` | Saved view/PNG file paths, Python messages and errors |
+A leather coral built from spatial spline profiles and lofted surfaces. The stalk, folded crown and curled rim define the organic form, with optional small polyps. The `form` control blends between a low rosette, a compact coral and a tall stalk.
 
-```python
-from cdf import viewtools
+### GH block: geometry
 
-if s_view:
-    print(viewtools.getview())
+The inputs correspond to the named arguments of `assignment_02_1.geometry(...)`. Unless otherwise noted, numeric values range from **0 to 10**.
 
-if r_view:
-    viewtools.setview()
+| Input | Default | Effect |
+| --- | --- | --- |
+| `form` | 5 | Overall form: 0 = low rosette, 5 = compact coral, 10 = tall, narrow stalk. |
+| `seed` | 1 | Reproducible asymmetry; −1,000,000 to 1,000,000, including fractional values. |
+| `size` | 30 | Overall scale in model units; 0.1 to 1,000,000. |
+| `height` | 5 | Crown elevation or stalk height, not total model height. |
+| `width` | 5 | Scaling along world X; 5 is neutral. |
+| `depth` | 5 | Scaling along world Y; 5 is neutral. |
+| `radius` | 5 | Crown reach; does not change neck/stalk thickness. 5 is neutral. |
+| `stem` | 0 | Lower-stalk fullness; 0 retains the baseline form. |
+| `bulb` | 5 | Fullness of the central attachment region. |
+| `edges` | 5 | Foot rounding and width of the shoulder transition into the crown. |
+| `main_freq` | 5 | Number of primary folds; maps 0–10 to 4–20 whole-number primary lobes. |
+| `main_amp` | 6 | Primary fold strength. |
+| `growth_shape` | 6 | Shape of the outward-increasing fold progression. |
+| `saddle_amp` | 4 | Strength of the broad saddle shape and crown inclination. |
+| `z_gravity` | 3 | Vertical bending, −10 to 10: positive bends downward, negative upward. |
+| `tilt` | 1 | Stalk and crown inclination. |
+| `curl` | 6 | Strength of the curled-back outer margins. |
+| `thickness` | 4 | Tissue thickness; remains positive even at 0. |
+| `lofts` | `True` | `True`: surfaces; `False`: construction curves only. |
+| `polyps` | 0 | Number of small polyps, integer 0–1500; surface mode only. |
 
-if c_export:
-    print(viewtools.caputreview(
-        c_path=c_path,
-        c_back=c_back,
-        c_color=c_color,
-        c_res=c_res,
-        c_border=c_border,
-    ))
-```
+**Output:** `geometry()` synchronizes Rhino objects under `CDF_Sarcophyton` and returns geometry grouped by part. `create_geometry()` creates the same groups without modifying the document.
 
-Connect **resolution (dpi)** to `c_res` and **border width (px)** to `c_border`.
-Use a Rhino model viewport, not a layout. Export fits the entire visible Rhino
-scene with ZoomExtents, independent of Assignment 1 or 2 and of the selection.
-Hidden objects and layers remain hidden; GH preview contributes to framing when
-its display conduit supplies extents. Let document/preview updates finish before
-exporting. No call to `composition()` is required.
+Use `polyps=0` for quick iterations. The surfaces are **not closed solids**; the foot and polyp tips remain open. Extreme folds may intersect – there is no collision detection. Earlier controls such as `soften`, `level`, `rotate`, `fold_delay` and `fold_spread` are no longer part of the current interface.
 
-PNG files are named `ViewCapture_YYMMDD_HHMMSS.png`; existing files are not
-overwritten. Capture uses three times the viewport's pixel dimensions, crops the
-visible silhouette and adds `c_border`. `c_res` changes print-resolution metadata,
-not pixel dimensions. The original camera and ground-plane state are restored
-after export; ground-plane shadows are not captured.
+## Assignment 02.2 · Truchet tiles
 
-## Assignment 02.1: folded coral
+![Truchet tile pattern with two color-coded orientations](assignments/02/renders/Pattern_Distinct.png)
 
-[assignment_02_1.py](src/cdf/assignment_02_1.py) creates a leaf-like coral as
-open, folded Breps, growing from a spline guide rooted at `(0, 0, 0)` toward +z.
-The narrow foot is centered on the origin. There is no wall thickness or polyp
-texture, and the leaves are not closed solids. Strong curling can cause leaves
-to overlap; a global self-intersection-free solid is not guaranteed.
+A square tile field centered at the origin in the XY plane. Two tile orientations connect edge midpoints with quarter circles or deformed curves. Four row patterns repeat across the field.
 
-Use the existing Python 3 geometry component with item inputs:
+### GH block: geometry
 
-```python
-from cdf import assignment_02_1
-assignment_02_1.geometry(q, r, s, t,
-                       cache_id=str(ghenv.Component.InstanceGuid))
-ghenv.Component.Hidden = True
-```
+Call using `assignment_02_2.geometry(q, r, s, t, u, v, w, x, y, z, p, ...)`.
+
+| Input | Default | Effect |
+| --- | --- | --- |
+| `q` | 1 | Field size: 1–20 produces 1×1 to 20×20 tiles. |
+| `r` | 1 | Tile size: 1–10 corresponds to 5–50 model units per side. |
+| `s` | 1 | Grid print width: positive value / 10 in mm. |
+| `t` | 1 | Pattern line print width: positive value / 10 in mm. |
+| `u` | 0 | Curve deformation 0–10; exact quarter circles at 0. |
+| `v` | 0 | Reproducible curve seed 0–10, including fractional values. |
+| `w` | 1 | Pattern 1–14 for row 1. |
+| `x` | 2 | Pattern 1–14 for row 2. |
+| `y` | 3 | Pattern 1–14 for row 3. |
+| `z` | 4 | Pattern 1–14 for row 4. |
+| `p` | `False` | `True`: distinguish orientations in blue/red; `False`: both black. |
+
+**Pattern sequence:** `B` and `R` denote the two orientations, regardless of the color setting. Words repeat from left to right; row 1 is at +Y.
+
+| Pattern | Word | Pattern | Word |
+| --- | --- | --- | --- |
+| 1 | B | 8 | RRBB |
+| 2 | R | 9 | BBBR |
+| 3 | BR | 10 | RBBB |
+| 4 | RB | 11 | BBBRR |
+| 5 | BBR | 12 | RRBBB |
+| 6 | RRB | 13 | BBBRRR |
+| 7 | BBRR | 14 | RRRBBB |
+
+**Output:** Curves on three Rhino layers: `CDF_Tiles::01_TileBorders`, `02_BlueTiles` and `03_RedTiles`; no GH geometry output is required. Print-width display is enabled automatically. Print widths are not model-space curve thicknesses; very wide lines may overlap visually.
+
+## Shared GH block: view
+
+[viewtools.py](src/cdf/viewtools.py) saves and restores the camera and exports the visible scene as a PNG. The block can be used independently of any assignment.
 
 | Input | Meaning |
 | --- | --- |
-| `q` | Seed, 1–10; fractional values produce reproducible variations |
-| `r` | Steps, 1–10; number of growth intervals, rounded half upward |
-| `s` | Step Height, 1–10 model units; first interval height |
-| `t` | Curl, 1–10; increasing fold strength and frequency |
+| `s_view` | Button: save the current view (`getview()`). |
+| `r_view` | Button: restore the saved view (`setview()`). |
+| `c_path` | Absolute export folder on your computer. |
+| `c_export` | Button: export a PNG (`caputreview(...)`). |
+| `c_back` | `True`: transparent background; `False`: use the background color. |
+| `c_color` | GH background color when `c_back=False`. |
+| `c_res` | Positive print resolution in dpi, default 300; does not change the pixel count. |
+| `c_border` | Border around the cropped image, 0–10,000 whole pixels. |
 
-Later interval heights are `s * 0.7**i`. The first interval forms the unbranched
-trunk and fan; each later interval doubles the number of leaf branches. Steps=10
-has 512 leaf ends and 1023 loft sections, so high settings can take longer.
-Each child starts on an exact half of its parent's upper profile. As intervals
-shrink, folds become more closely spaced in height. Defaults are Seed=1,
-Steps=6, Step Height=3.5, Curl=4.1. Finite controls are clamped to 1–10;
-non-numeric and non-finite inputs raise an error. Inputs `u` through `p` are
-currently unused and must not be passed to this function.
+**Output:** `out` displays file paths and messages. Camera data is saved as `view.json` beside the module by default; save a view before restoring it for the first time.
 
-Breps automatically synchronize to `CDF_Coral::01_Coral`, muted peach
-RGB `(224, 174, 145)`, using the existing component-owned layer cache. Recomputing
-does not accumulate duplicates or replace other components' objects. Pass a
-unique `cache_id` per component; `force=True` restores manually deleted cached
-objects. `geometry()` returns `None`; `create_geometry()` returns the Brep group
-without baking. Use Rendered display to see the layer material.
+Export uses a **Rhino model viewport, not a layout**, fits the visible scene and crops the image with the requested border. Hidden objects remain hidden; GH preview is included where it provides extents. Capture uses three times the viewport's pixel dimensions and excludes ground-plane shadows. The camera and ground-plane state are restored afterward. Files are named `ViewCapture_YYMMDD_HHMMSS.png`; existing files are not overwritten.
 
-## Assignment 2: planar pattern tiles
+## Additional resources
 
-Use a Python 3 Grasshopper component with item inputs `q, r, s, t, u, v, w, x, y, z, p`:
-
-```python
-from cdf import assignment_02
-assignment_02.geometry(q, r, s, t, u, v, w, x, y, z, p,
-                      cache_id=str(ghenv.Component.InstanceGuid))
-ghenv.Component.Hidden = True
-```
-
-No cache switch or geometry output is needed: curves are always synchronized to
-Rhino, without duplicate GH preview. Existing owned pipes are replaced on the
-first run. Other components' objects are untouched.
-
-| Input | Meaning |
-| --- | --- |
-| `q` | Size: 1–20 gives 1×1 to 20×20 tiles |
-| `r` | Tile size: 1–10 maps to 5–50 model units |
-| `s` | Border print width: input / 10 mm |
-| `t` | Pattern print width: input / 10 mm |
-| `u` | Curvature: 0–10; zero uses exact quarter circles |
-| `v` | Curve seed: 0–10, fractional values supported |
-| `w, x, y, z` | Patterns 1–14 for rows 1–4, repeated vertically |
-| `p` | Pattern distinction: dark blue/red if true, both black otherwise |
-Size and pattern selections round to the nearest integer (halves upward) and
-clamp to their ranges. Widths accept **any positive finite number**, including
-values below 1 or above 10. Zero/negative widths are rejected. PlotWeight is a
-physical print width, not a model-space thickness. PrintDisplay is enabled on
-each call. Very thick strokes may visually overlap although centerlines do not.
-
-The square field is centered at the origin; all curves lie at Z=0. Row 1 is at
-+Y; words repeat left to right and the final repetition is truncated. B and R
-refer only to the two tile orientations, not to display colors:
-
-| Pattern | Repeated word |
-| --- | --- |
-| 1 | B |
-| 2 | R |
-| 3 | BR |
-| 4 | RB |
-| 5 | BBR |
-| 6 | RRB |
-| 7 | BBRR |
-| 8 | RRBB |
-| 9 | BBBR |
-| 10 | RBBB |
-| 11 | BBBRR |
-| 12 | RRBBB |
-| 13 | BBBRRR |
-| 14 | RRRBBB |
-
-Blue connects west–south and north–east; red connects west–north and south–east.
-Curves meet at edge midpoints with perpendicular tangents. At zero curvature,
-exact quarter circles are used. Positive curvature uses degree-five Bezier
-splines with two fixed endpoints and four inner control points. The two tangent
-handles lie on the edge normals, independently spaced between one eighth and
-one quarter tile width from their edges. The two free points have a minimum
-separation of 0.25 + 0.20 × normalized curvature tile widths (0.25–0.45).
-Thus their required separation grows with line curve, although individual random
-samples need not change monotonically. The entire control polygon must be
-non-self-intersecting, including nonadjacent touches/overlaps.
-The other two points are sampled inside
-the area between the two reference quarter circles: each free point must be
-at least half a tile width from both relevant opposite corners. This condition
-is checked after curvature blending as well. Points and curves may cross the
-tile diagonal. Inflections are allowed again; this rule constrains the free
-control points, not the entire curve relative to the reference circles.
-Each pair is checked for self-intersections and mutual intersections
-(including touches/overlaps). Conflicting deformations are deterministically
-reduced; persistent conflicts fall back to the two reference quarter circles.
-Convex-hull containment keeps all curves inside their tile.
-Curvature blends a circle-like Bezier reference toward the random controls.
-Only the zero setting is exactly circular. Curve seed gives reproducible local
-randomness. Shared borders are emitted only once.
-
-Three layers are always used: `CDF_Tiles::01_TileBorders` (black),
-`CDF_Tiles::02_BlueTiles` and `CDF_Tiles::03_RedTiles`. Pattern distinction toggles
-the form layers between black and dark blue (0,0,139) / dark red (139,0,0).
-Existing owned curves are migrated on recompute; unrelated objects are untouched.
-The shared `layer.cache_geometry` accepts optional `plot_weights` in millimeters
-per geometry group. Assignment 1 retains its existing cache behavior.
-Width/color changes refresh owned objects; unchanged inputs preserve manual edits.
-Use `force=True` to rebuild unchanged owned objects.
-Run regression tests with `python -m unittest discover -s tests`.
-Actual spline/intersection operations, PrintDisplay and PNG stroke rendering
-must additionally be checked inside Rhino 8.
-
+- [assignments/](assignments/): GH assignments and render images in their respective `renders` subfolders.
+- [src/cdf/](src/cdf/): Geometry, layer, utility and viewport modules.
+- [exercises/](exercises/): Exercises covering Python, geometry and algorithmic design.
+- [sessions-slides/](sessions-slides/): Lecture and course slides.
+- [docs/](docs/): Instructions for forking and submitting via GitHub.

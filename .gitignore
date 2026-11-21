@@ -103,3 +103,12 @@ ENV/
 
 # Visual Studio Code
 .vscode/
+
+# Github
+.github/
+
+# View file
+#view.json
+
+# Ordner mit vorangehendem _
+_*/
