@@ -45,80 +45,96 @@ Optional module settings: `scale=1.0` for overall scale, `origin=(0, 0, 0)` for 
 
 ## Assignment 02.1 · Sarcophyton
 
-| Surface view | Construction curves |
+| Low rosette | Tall stalk |
 | --- | --- |
-| ![Sarcophyton: folded crown with a rolled rim and stalk](assignments/02/renders/Sarcopython_Shade.png) | ![Sarcophyton: spatial profile curves of the folded coral](assignments/02/renders/Sarcopythgon_Lines.png) |
+| ![Sarcophyton with a low, spreading crown](assignments/02/renders/Coral_Flat.png) | ![Sarcophyton with a tall stalk and folded crown](assignments/02/renders/Coral_Tall.png) |
 
-A leather coral built from spatial spline profiles and lofted surfaces. The stalk, folded crown and curled rim define the organic form, with optional small polyps. The `form` control blends between a low rosette, a compact coral and a tall stalk.
+Spatial spline profiles are lofted into a stalk and folded crown with a curled rim. Use `form` to vary the silhouette and `stage` to inspect the curves that build the final surfaces.
 
 ### GH block: geometry
 
-The inputs correspond to the named arguments of `assignment_02_1.geometry(...)`. Unless otherwise noted, numeric values range from **0 to 10**.
+The table maps the script inputs to `assignment_02_1.geometry(...)`. Defaults are from the Python API; numeric controls range from **0 to 10** unless noted.
 
-| Input | Default | Effect |
+| GH input | Parameter | Default | Effect |
+| --- | --- | --- | --- |
+| `a` | `seed` | 1 | Reproducible asymmetry; −1,000,000 to 1,000,000, including fractional values. |
+| `b` | `form` | 5 | 0 = low rosette, 5 = compact coral, 10 = tall, narrow stalk. |
+| `c` | `radius` | 5 | Crown reach without changing neck or stalk thickness; 5 is neutral. |
+| `d` | `stem` | 0 | Lower-stalk fullness; 0 retains the baseline form. |
+| `e` | `edges` | 5 | Foot rounding and width of the shoulder transition. |
+| `f` | `height` | 5 | Crown elevation, not total model height. |
+| `g` | `width` | 5 | Scaling along world X; 5 is neutral. |
+| `h` | `depth` | 5 | Scaling along world Y; 5 is neutral. |
+| `i` | `bulb` | 5 | Fullness of the central attachment region. |
+| `j` | `lobe_density` | 5 | Maps 0–10 to 4–20 primary lobes. |
+| `k` | `lobe_strength` | 6 | Strength of the primary folds. |
+| `l` | `growth_shape` | 6 | Controls how the folds develop toward the rim. |
+| `m` | `saddle_amp` | 4 | Strength of the broad saddle shape and crown inclination. |
+| `n` | `z_gravity` | 3 | Vertical bending from −10 to 10; positive bends down, negative up. |
+| `o` | `tilt` | 1 | Stalk and crown inclination. |
+| `p` | `curl` | 6 | How far the outer margins curl back. |
+| `q` | `thickness` | 4 | Tissue thickness; remains positive even at 0. |
+| `r` | `stage` | 9 | Integer 1–9; selects construction curves or final lofts. |
+| `s` | `color` | Built-in palette | Color swatch for the crown; the other parts use lighter or darker shades. |
+
+### Construction stages
+
+1 shows crown core rings; 2 adds crown guides; 3 shows guides with full crown sections; 4 shows crown sections only. Stages 5, 6 and 7 add stem guides, stem guides and sections, or stem sections only, respectively. Stage 8 shows the loft profiles and stage 9 shows only the lofted surfaces.
+
+| Stage 1 | Stage 2 | Stage 3 |
 | --- | --- | --- |
-| `form` | 5 | Overall form: 0 = low rosette, 5 = compact coral, 10 = tall, narrow stalk. |
-| `seed` | 1 | Reproducible asymmetry; −1,000,000 to 1,000,000, including fractional values. |
-| `size` | 30 | Overall scale in model units; 0.1 to 1,000,000. |
-| `height` | 5 | Crown elevation or stalk height, not total model height. |
-| `width` | 5 | Scaling along world X; 5 is neutral. |
-| `depth` | 5 | Scaling along world Y; 5 is neutral. |
-| `radius` | 5 | Crown reach; does not change neck/stalk thickness. 5 is neutral. |
-| `stem` | 0 | Lower-stalk fullness; 0 retains the baseline form. |
-| `bulb` | 5 | Fullness of the central attachment region. |
-| `edges` | 5 | Foot rounding and width of the shoulder transition into the crown. |
-| `main_freq` | 5 | Number of primary folds; maps 0–10 to 4–20 whole-number primary lobes. |
-| `main_amp` | 6 | Primary fold strength. |
-| `growth_shape` | 6 | Shape of the outward-increasing fold progression. |
-| `saddle_amp` | 4 | Strength of the broad saddle shape and crown inclination. |
-| `z_gravity` | 3 | Vertical bending, −10 to 10: positive bends downward, negative upward. |
-| `tilt` | 1 | Stalk and crown inclination. |
-| `curl` | 6 | Strength of the curled-back outer margins. |
-| `thickness` | 4 | Tissue thickness; remains positive even at 0. |
-| `lofts` | `True` | `True`: surfaces; `False`: construction curves only. |
-| `polyps` | 0 | Number of small polyps, integer 0–1500; surface mode only. |
+| ![Stage 1: crown core rings](assignments/02/renders/Coral_Stage_1.png) | ![Stage 2: crown core rings and guides](assignments/02/renders/Coral_Stage_2.png) | ![Stage 3: crown guides and full crown sections](assignments/02/renders/Coral_Stage_3.png) |
+| **Stage 5** | **Stage 6** | **Stage 8** |
+| ![Stage 5: crown sections and stem guides](assignments/02/renders/Coral_Stage_5.png) | ![Stage 6: crown sections with stem guides and sections](assignments/02/renders/Coral_Stage_6.png) | ![Stage 8: loft profiles](assignments/02/renders/Coral_Stage_8.png) |
 
-**Output:** `geometry()` synchronizes Rhino objects under `CDF_Sarcophyton` and returns geometry grouped by part. `create_geometry()` creates the same groups without modifying the document.
-
-Use `polyps=0` for quick iterations. The surfaces are **not closed solids**; the foot and polyp tips remain open. Extreme folds may intersect – there is no collision detection. Earlier controls such as `soften`, `level`, `rotate`, `fold_delay` and `fold_spread` are no longer part of the current interface.
+**Output:** Rhino objects are synchronized under `CDF_Sarcophyton`. The final surface has an open base, and extreme folds can self-intersect.
 
 ## Assignment 02.2 · Truchet tiles
 
-![Truchet tile pattern with two color-coded orientations](assignments/02/renders/Pattern_Distinct.png)
+| Tile field | Tile pattern variant |
+| --- | --- |
+| ![Truchet tile field](assignments/02/renders/Tiles.png) | ![Truchet pattern variant](assignments/02/renders/Tiles_Pattern.png) |
 
-A square tile field centered at the origin in the XY plane. Two tile orientations connect edge midpoints with quarter circles or deformed curves. Four row patterns repeat across the field.
+Two tile orientations connect edge midpoints with quarter circles or deformed curves on a square grid in the XY plane. Ten layout algorithms arrange the orientations, and optional fills color individual tiles or connected motif regions.
 
-### GH block: geometry
+### GH block: tiles
 
-Call using `assignment_02_2.geometry(q, r, s, t, u, v, w, x, y, z, p, ...)`.
+Input names below match the labels on the connected Grasshopper sliders, color swatches and toggles. Defaults are from the Python API.
 
-| Input | Default | Effect |
+| GH input | Default | Effect |
 | --- | --- | --- |
-| `q` | 1 | Field size: 1–20 produces 1×1 to 20×20 tiles. |
-| `r` | 1 | Tile size: 1–10 corresponds to 5–50 model units per side. |
-| `s` | 1 | Grid print width: positive value / 10 in mm. |
-| `t` | 1 | Pattern line print width: positive value / 10 in mm. |
-| `u` | 0 | Curve deformation 0–10; exact quarter circles at 0. |
-| `v` | 0 | Reproducible curve seed 0–10, including fractional values. |
-| `w` | 1 | Pattern 1–14 for row 1. |
-| `x` | 2 | Pattern 1–14 for row 2. |
-| `y` | 3 | Pattern 1–14 for row 3. |
-| `z` | 4 | Pattern 1–14 for row 4. |
-| `p` | `False` | `True`: distinguish orientations in blue/red; `False`: both black. |
+| `size` | 1 | Grid size, 1–20 tiles along each side. |
+| `tile_size` | 1 | Tile size: 1–10 corresponds to 5–50 model units per side. |
+| `tile_linewidth` | 1 | Grid print width in mm: positive input divided by 10. |
+| `line_linewidth` | 1 | Motif print width in mm: positive input divided by 10. |
+| `line_curve` | 0 | Curve deformation, 0–10; 0 gives exact quarter circles. |
+| `seed` | 0 | Reproducible curve variation, 0–10; also seeds random runs and region shades. |
+| `algorithm` | 1 | Layout algorithm, 1–10 (see below). |
+| `tile_line` | Black | Grid line color swatch. |
+| `line` | Black | Motif line color swatch. |
+| `background` | Light gray | Color swatch for background fills. |
+| `background` | `False` | Toggle to enable background fills. |
+| `fill_patterns` | `False` | Shade connected motif regions instead of whole tiles. Requires the `background` toggle on and `pattern_distinction` off. |
+| `pattern_distinction` | `False` | Use a black grid and blue/red motifs. If fills are enabled, fill whole tiles by orientation and ignore `fill_patterns`. |
+| `contrast` | 4 | Fill contrast, 0–10: increases shade variation with `fill_patterns` or darkens fills with `pattern_distinction`. |
+| `transparency` | 0 | Fill transparency, 0–10: 0 is opaque, 10 omits fills. Lines are unaffected. |
 
-**Pattern sequence:** `B` and `R` denote the two orientations, regardless of the color setting. Words repeat from left to right; row 1 is at +Y.
+| Algorithm | Layout |
+| --- | --- |
+| 1 | Checkerboard |
+| 2 | Vertical stripes |
+| 3 | Horizontal stripes |
+| 4 | Diagonal bands |
+| 5 | Square rings |
+| 6 | Single blue tiles alternating with growing red runs |
+| 7 | Alternating blue/red runs of paired lengths |
+| 8 | Alternating runs of increasing length |
+| 9 | Alternating runs with Fibonacci lengths |
+| 10 | Alternating runs with seeded random lengths |
 
-| Pattern | Word | Pattern | Word |
-| --- | --- | --- | --- |
-| 1 | B | 8 | RRBB |
-| 2 | R | 9 | BBBR |
-| 3 | BR | 10 | RBBB |
-| 4 | RB | 11 | BBBRR |
-| 5 | BBR | 12 | RRBBB |
-| 6 | RRB | 13 | BBBRRR |
-| 7 | BBRR | 14 | RRRBBB |
+Run-based layouts (6–10) continue across row breaks. With `fill_patterns` active, connected motifs are filled across tile boundaries rather than being cut by the grid.
 
-**Output:** Curves on three Rhino layers: `CDF_Tiles::01_TileBorders`, `02_BlueTiles` and `03_RedTiles`; no GH geometry output is required. Print-width display is enabled automatically. Print widths are not model-space curve thicknesses; very wide lines may overlap visually.
+**Output:** Grid lines, motif curves and optional solid hatches are synchronized under `CDF_Tiles`. Print-width display is enabled automatically; line widths are print settings, not geometric thicknesses.
 
 ## Shared GH block: view
 

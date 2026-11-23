@@ -108,7 +108,7 @@ ENV/
 .github/
 
 # View file
-#view.json
+view.json
 
 # Ordner mit vorangehendem _
 _*/

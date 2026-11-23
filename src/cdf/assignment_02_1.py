@@ -9,8 +9,8 @@ radius (0..10, default 5) changes crown reach from a fixed neck, not shaft girth
 5 retains the baseline reach. stem (0..10, default 0) adds lower-shaft fullness
 without moving its axis or widening the crown. edges blends the rounded, inclined
 foot into a broader crown shoulder, without a horizontal flange at the ground.
-main_amp has half its former angular gain. Broad crests, smooth periodic fields
-and finer contour sampling keep the primary lobes rounded as amplitude rises.
+lobe_density (0..10, default 5) maps to 4..20 primary lobes. lobe_strength
+(0..10, default 6) retains the halved angular gain and rounded primary crests.
 Primary lobes follow an arc-length reference contour with small seeded spacing
 variations, rather than concentrating at particular angles of elongated forms.
 z_gravity (-10..10) applies a quadratic vertical displacement across the whole
@@ -22,8 +22,9 @@ Meridian guides bend, fan sideways, develop secondary folds and turn back at
 independently curled margins. Successive transverse splines loft the resulting
 ruffled sheet. Hyperbolic growth motivates the increasing fold complexity; this
 is not an exact constant-curvature embedding. No mesh or external dependencies.
-lofts=False shows construction splines; polyps only applies in surface mode.
-Extreme folds can intersect. The basal attachment and small polyp tips are open.
+stage=1..9 shows the crown core, crown guides and sections, then stem guides
+and sections, followed by the final loft profiles and finished surfaces (default).
+Extreme folds can intersect. The basal attachment remains open.
 """
 import bisect
 import math
@@ -35,9 +36,30 @@ PALETTE = {
     "crown": ("02_Crown", (222, 185, 122), 0.0, 0.0),
     "underside": ("03_Underside", (190, 150, 102), 0.0, 0.0),
     "rim": ("04_Rim", (236, 205, 147), 0.0, 0.0),
-    "polyps": ("05_Polyps", (244, 221, 171), 0.0, 0.0),
 }
 TAU = 2.0 * math.pi
+
+
+def _color_palette(color):
+    if color is None:
+        return PALETTE
+    # Accept a System.Drawing.Color or a wrapped Grasshopper colour.
+    color = getattr(color, "Value", color)
+    try:
+        base = (int(color.R), int(color.G), int(color.B))
+    except (AttributeError, TypeError, ValueError, OverflowError) as exc:
+        raise ValueError("Connect a Grasshopper Colour Swatch to color.") from exc
+    if any(not 0 <= channel <= 255 for channel in base):
+        raise ValueError("Color RGB channels must be between 0 and 255.")
+
+    shades = {
+        "stalk": tuple(round(channel*.82) for channel in base),
+        "crown": base,
+        "underside": tuple(round(channel*.86) for channel in base),
+        "rim": tuple(round(channel+.30*(255-channel)) for channel in base),
+    }
+    return {key: (name, shades[key], shine, reflection)
+            for key, (name, _, shine, reflection) in PALETTE.items()}
 
 
 def _control(value, name, low=0.0, high=10.0):
@@ -89,7 +111,7 @@ def _mix(a, b, t):
 def _unit(a):
     length = math.sqrt(_dot(a, a))
     if length < 1e-14:
-        raise ValueError("Degenerate surface frame; reduce main_amp or curl.")
+        raise ValueError("Degenerate surface frame; reduce lobe_strength or curl.")
     return _scale(a, 1.0 / length)
 
 
@@ -104,13 +126,13 @@ def _periodic(values, parameter):
 
 
 def growth_layout(form=5, seed=1, size=30, height=5, width=5, depth=5,
-                  bulb=5, main_freq=5, main_amp=6, growth_shape=6,
+                  bulb=5, lobe_density=5, lobe_strength=6, growth_shape=6,
                   saddle_amp=4, z_gravity=3, tilt=1, curl=6,
                   thickness=4, edges=5, *, radius=5, stem=0):
     """Build a numeric guide net, with no Rhino or document dependencies.
 
     Controls are 0..10, except seed, size and signed z_gravity (-10..10).
-    main_freq rounds to 4..20 primary lobes with nearly equal contour spacing.
+    lobe_density rounds to 4..20 primary lobes with nearly equal contour spacing.
     radius scales the outward guide length by .5+.1*radius (5 is neutral).
     The neck dimensions and tissue thickness remain tied to size, not radius.
     stem=0 retains the shaft outline; increasing stem swells its lower 72%.
@@ -129,7 +151,7 @@ def growth_layout(form=5, seed=1, size=30, height=5, width=5, depth=5,
     c["z_gravity"] = _control(z_gravity, "z_gravity", -10, 10)
     rng = random.Random(c["seed"])
     c["phases"] = [rng.uniform(-math.pi, math.pi) for _ in range(3)]
-    c["lobes"] = int(4 + 1.6*c["main_freq"] + .5)
+    c["lobes"] = int(4 + 1.6*c["lobe_density"] + .5)
     ranges = {"reach": (.82, 1.18), "pitch": (-.35, .35),
               "roll": (-.7, .7), "twist": (-.65, .65),
               "branch": (.28, .55), "curl_start": (.57, .76),
@@ -216,7 +238,7 @@ def _guide_frame(c, theta):
 
 
 def _growth_direction(c, guide, s, theta):
-    amplitude = c["main_amp"]/20.0
+    amplitude = c["lobe_strength"]/20.0
     lateral = .35
     k = 1.5+.14*c["growth_shape"]
     growth = (math.sinh(k*s)/math.sinh(k)) ** .55
@@ -321,16 +343,12 @@ def _build_sheet(c):
             for p, n, d in zip(c["grid"][-1], normals[-1], outward)])
     c["rim"].append(c["lower"][-1])
     _apply_gravity(c)
-    if c["z_gravity"] != 0:
-        normals, _ = _sheet_frames(c["grid"])
     _support_grid(c, angles, growth)
     # Apply axis scales last, including shoulders, offsets and foot. Neither
     # slider changes Z, the other horizontal axis or the gravity clearance.
     for key in ("grid", "upper", "lower", "rim", "support", "underside_profiles"):
         c[key] = [[(x*c["width_scale"], y*c["depth_scale"], z)
                    for x, y, z in row] for row in c[key]]
-    c["normals"] = [[_unit((n[0]/c["width_scale"], n[1]/c["depth_scale"], n[2]))
-                     for n in row] for row in normals]
 
 
 def _sheet_frames(grid):
@@ -364,18 +382,6 @@ def _grid_point(c, grid, r, theta):
     u = (theta-c["angles"][i])/(end-c["angles"][i])
     return _mix(_mix(grid[j][i], grid[j][following], u),
                 _mix(grid[j+1][i], grid[j+1][following], u), t)
-
-
-def _crown_point(c, r, theta):
-    return _grid_point(c, c["grid"], r, theta)
-
-
-def _frame(c, r, theta):
-    normal = _unit(_grid_point(c, c["normals"], r, theta))
-    epsilon = math.pi/c["samples"]
-    angular = _subtract(_crown_point(c, r, theta+epsilon),
-                        _crown_point(c, r, theta-epsilon))
-    return normal, _unit(_cross(angular, normal))
 
 
 def _skin(c, r, theta, side):
@@ -493,117 +499,97 @@ def _support_grid(c, angles, growth):
             row.append(point)
 
 
-def _polyp_site(rg, crown, point, reference_normal):
-    target = rg.Point3d(*point)
-    best, distance = None, float("inf")
-    for brep in crown:
-        for face in brep.Faces:
-            ok, u, v = face.ClosestPoint(target)
-            if not ok:
-                continue
-            location = face.PointAt(u, v)
-            separation = location.DistanceTo(target)
-            normal = face.NormalAt(u, v)
-            if separation >= distance or not normal.IsValid or normal.Length < 1e-12:
-                continue
-            direction = _unit((normal.X, normal.Y, normal.Z))
-            if _dot(direction, reference_normal) < 0:
-                direction = _scale(direction, -1)
-            best, distance = ((location.X, location.Y, location.Z), direction), separation
-    if best is None:
-        raise RuntimeError("Could not attach a polyp to the lofted crown.")
-    return best
+def _stage_number(value):
+    message = "stage must be an integer from 1 to 9."
+    if isinstance(value, bool):
+        raise ValueError(message)
+    try:
+        number = float(value)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ValueError(message) from exc
+    if number not in range(1, 10):
+        raise ValueError(message)
+    return int(number)
 
 
-def _make_polyps(rg, c, count, crown):
-    """Area-weighted placement, projected onto the actual crown lofts."""
-    if not count:
-        return []
-    cells, cumulative, total = [], [], 0.0
-    grid = c["upper"]
-    for j in range(1, len(grid)-1):
-        for i in range(c["samples"]):
-            following = (i+1) % c["samples"]
-            a, b = grid[j][i], grid[j][following]
-            d, e = grid[j+1][i], grid[j+1][following]
-            first = _cross(_subtract(b, a), _subtract(d, a))
-            second = _cross(_subtract(b, e), _subtract(d, e))
-            area = .5*(math.sqrt(_dot(first, first))+math.sqrt(_dot(second, second)))
-            if area <= 0:
-                continue
-            total += area
-            cells.append((j, i))
-            cumulative.append(total)
-    if not cells:
-        raise RuntimeError("No usable crown area for polyp placement.")
-    shapes = []
-    rng = random.Random(c["seed"]+1927)
-    for _ in range(count):
-        index = min(len(cells)-1, bisect.bisect_left(cumulative, rng.random()*total))
-        j, i = cells[index]
-        r = c["radii"][j]+(.02+.96*rng.random())*(c["radii"][j+1]-c["radii"][j])
-        end = c["angles"][i+1] if i+1 < c["samples"] else TAU
-        theta = c["angles"][i]+rng.random()*(end-c["angles"][i])
-        normal, radial = _frame(c, r, theta)
-        base, normal = _polyp_site(rg, crown, _skin(c, r, theta, 1), normal)
-        tangent = _unit(_cross(normal, radial))
-        radial = _unit(_cross(tangent, normal))
-        length = c["body_scale"]*(.012+.013*rng.random())
-        radius = length*.14
-        curves = []
-        for t, factor in ((0, 1), (.7, .7), (1, .18)):
-            center = _add(base, _scale(normal, t*length))
-            curves.append(_ring(rg, [_add(center, _add(
-                _scale(radial, radius*factor*math.cos(TAU*i/8)),
-                _scale(tangent, radius*factor*math.sin(TAU*i/8)))) for i in range(8)]))
-        shapes.extend(_loft(rg, curves, "polyp"))
-    return shapes
+def _growth_guides(rg, rows, count):
+    curves = []
+    for j in range(count):
+        column = j*len(rows[0])//count
+        points = [rg.Point3d(*row[column]) for row in rows]
+        curve = rg.Curve.CreateInterpolatedCurve(points, 3, rg.CurveKnotStyle.Chord)
+        if curve is None or not curve.IsValid:
+            raise RuntimeError("Could not interpolate a Sarcophyton growth guide.")
+        curves.append(curve)
+    return curves
+
+
+def _construction_curves(rg, c, stage, groups):
+    grid = c["grid"]
+    neck = c["neck_index"]
+    crown_rows = grid[1:neck+1] if stage <= 2 else grid[1:]
+    groups["crown"] = [_ring(rg, row) for row in crown_rows]
+    if stage in (2, 3):
+        groups["crown"].extend(_growth_guides(rg, grid[neck:], 2*c["lobes"]))
+    if stage in (5, 6):
+        groups["stalk"].extend(_growth_guides(rg, c["support"], 8))
+    if stage in (6, 7):
+        groups["stalk"].extend(_ring(rg, row) for row in c["support"])
 
 
 def create_geometry(form=5, seed=1, size=30, height=5, width=5, depth=5,
-                    bulb=5, main_freq=5, main_amp=6, growth_shape=6,
+                    bulb=5, lobe_density=5, lobe_strength=6, growth_shape=6,
                     saddle_amp=4, z_gravity=3, tilt=1, curl=6,
-                    thickness=4, edges=5, lofts=True, polyps=0, *, radius=5, stem=0):
-    """Loft the spatial guide net and its noncircular edges transitions.
+                    thickness=4, edges=5, stage=9, *, radius=5, stem=0):
+    """Return one construction stage from the same guide net.
 
-    Surface mode uses one continuous lower loft from foot through shoulder to
-    crown rim, stored in stalk. The underside group remains empty for palette
-    compatibility. Curve mode returns separate support and underside profiles.
-    radius and stem are keyword-only, keeping existing positional calls valid.
+    1: crown core rings; 2: core rings and crown guides; 3: crown guides
+    and full crown mid-surface sections; 4: crown sections only.
+    5–7 retain the crown sections and add, respectively, stem guides,
+    stem guides and sections, and stem sections only.
+    8: exact loft profiles (shared rings once); 9: surface lofts only.
+    The lower loft spans the foot to the crown rim.
     The basal foot stays open; extreme parameters can cause self-intersections.
     """
-    count = int(_control(polyps, "polyps", 0, 1500)+.5)
+    stage = _stage_number(stage)
     c = growth_layout(form=form, seed=seed, size=size, height=height,
-        width=width, depth=depth, bulb=bulb, main_freq=main_freq, main_amp=main_amp,
-        growth_shape=growth_shape, saddle_amp=saddle_amp, z_gravity=z_gravity,
+        width=width, depth=depth, bulb=bulb, lobe_density=lobe_density,
+        lobe_strength=lobe_strength, growth_shape=growth_shape,
+        saddle_amp=saddle_amp, z_gravity=z_gravity,
         tilt=tilt, curl=curl, thickness=thickness, edges=edges, radius=radius, stem=stem)
     import Rhino.Geometry as rg
 
     groups = {key: [] for key in PALETTE}
+    if stage <= 7:
+        _construction_curves(rg, c, stage, groups)
+        return groups
+
     upper = [_ring(rg, row) for row in c["upper"][1:]]
     lower = [_ring(rg, row) for row in c["underside_profiles"]]
     stalk = [_ring(rg, row) for row in c["support"][:-1]] + [lower[0]]
     lip = [upper[-1]]+[_ring(rg, row) for row in c["rim"][1:-1]]+[lower[-1]]
-    if not lofts:
-        groups.update(stalk=stalk, crown=upper, underside=lower, rim=lip)
+    if stage == 8:
+        groups.update(stalk=stalk[:-1], crown=upper, underside=lower, rim=lip[1:-1])
         return groups
     # Isolate the central pole so it cannot flatten the many outer return folds.
     groups["crown"] = _loft(rg, upper[:2], "central crown", start=c["upper"][0][0])
     groups["crown"].extend(_loft(rg, upper[1:], "folded crown"))
     groups["stalk"] = _loft(rg, stalk+lower[1:], "foot, shaft, shoulder and underside")
     groups["rim"] = _loft(rg, lip, "rolled rim")
-    groups["polyps"] = _make_polyps(rg, c, count, groups["crown"])
     return groups
 
 
 def geometry(form=5, seed=1, size=30, height=5, width=5, depth=5,
-             bulb=5, main_freq=5, main_amp=6, growth_shape=6,
+             bulb=5, lobe_density=5, lobe_strength=6, growth_shape=6,
              saddle_amp=4, z_gravity=3, tilt=1, curl=6,
-             thickness=4, edges=5, lofts=True, polyps=0, *, radius=5, stem=0,
-             cache_id="assignment02_1_2", force=False):
+             thickness=4, edges=5, stage=9, *, radius=5, stem=0,
+             cache_id="assignment02_1_2", force=False, color=None):
     """GH entry point: synchronize owned Rhino objects and return preview groups.
 
     Use named arguments and cache_id=str(ghenv.Component.InstanceGuid).
+    Connect a Colour Swatch to color (item access, Colour type hint). The crown
+    uses its RGB value; the other layers use lighter or darker shades. Alpha
+    is ignored. If color is omitted, the original palette remains in use.
     Remove fold_delay/fold_spread from the GH call; both are now fixed at zero,
     as are the previously removed soften/level/rotate controls.
     Add radius (0..10, default 5) and stem (0..10, default 0) as keyword inputs.
@@ -611,14 +597,15 @@ def geometry(form=5, seed=1, size=30, height=5, width=5, depth=5,
     stem increases lower-shaft fullness around its existing axis, fading to zero
     before the neck. At 0 its gain is exactly one. size still scales everything.
     edges (0..10) controls the enlarged foot rounding and broader upper shoulders.
-    main_amp now uses half its former angular gain, with rounded primary crests
-    and smoother random bend fields. main_freq maps 0..10 to 4..20 primary lobes
-    with bounded, seeded spacing variation along the reference contour. curl
+    lobe_strength uses the halved angular gain, with rounded primary crests
+    and smoother random bend fields. lobe_density maps 0..10 to 4..20 primary
+    lobes with bounded, seeded spacing variation along the reference contour. curl
     controls return folds; z_gravity (-10..10) bends the crown in world Z,
     downward for positive values, upward for negative values. Only downward
     motion is limited softly by ground clearance. No collision-free guarantee.
     width/depth independently scale world X/Y, with 5 neutral for both.
-    Set lofts=True for surfaces; False intentionally shows only profile splines.
+    Use an integer GH slider stage=1..9 (default 9). Stages 1..8 show only
+    construction curves; stage 9 lofts the profiles from stage 8 into surfaces.
     This module never overwrites the other coral's layers or cached objects.
     """
     import Rhino
@@ -627,12 +614,14 @@ def geometry(form=5, seed=1, size=30, height=5, width=5, depth=5,
     doc = Rhino.RhinoDoc.ActiveDoc
     if doc is None:
         raise RuntimeError("An active Rhino document is required.")
+    palette = _color_palette(color)
     groups = create_geometry(form=form, seed=seed, size=size, height=height,
-        width=width, depth=depth, bulb=bulb, main_freq=main_freq, main_amp=main_amp,
-        growth_shape=growth_shape, saddle_amp=saddle_amp, z_gravity=z_gravity,
+        width=width, depth=depth, bulb=bulb, lobe_density=lobe_density,
+        lobe_strength=lobe_strength, growth_shape=growth_shape,
+        saddle_amp=saddle_amp, z_gravity=z_gravity,
         tilt=tilt, curl=curl, thickness=thickness, edges=edges,
-        lofts=lofts, polyps=polyps, radius=radius, stem=stem)
-    layer.ensure_layers(palette=PALETTE, root=ROOT)
-    layer.cache_geometry(groups, cache_id, force=force, palette=PALETTE, root=ROOT)
+        stage=stage, radius=radius, stem=stem)
+    layer.ensure_layers(palette=palette, root=ROOT)
+    layer.cache_geometry(groups, cache_id, force=force, palette=palette, root=ROOT)
     doc.Views.Redraw()
     return groups
